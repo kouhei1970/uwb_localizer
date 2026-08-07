@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -54,7 +55,12 @@ def cmd_sim(args: argparse.Namespace) -> int:
     print(f"アンカー {int(cond['n'])} 台  同一平面={cond['coplanar']}  "
           f"平面からの広がり {cond['planarity']:.2f} m")
     if cond["coplanar"] and args.dim == 3:
-        print("  警告: 同一平面配置で 3D を解こうとしています。高さはほぼ観測できません。")
+        print("  警告: 同一平面配置で 3D を解こうとしています。高さがほぼ観測できないうえ、")
+        print("        その平面に関する鏡像が測距値では区別できません")
+        print("        (水平は正しいまま、高さだけ丸ごと折り返ることがあります)。")
+        print("        --dim 2 で高さを固定するのが確実です。")
+        # 同じ内容をライブラリ側も warnings で出すので, ここでは二重に見せない.
+        warnings.filterwarnings("ignore", message=".*同一平面.*")
 
     error = ErrorModel(
         sigma0=args.sigma0,

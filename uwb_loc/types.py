@@ -269,6 +269,13 @@ class Fix:
         どの忠実度レベルが出したか ("Lv0" 〜 "Lv3").
     velocity:
         速度推定 [m/s]. 追跡フィルタのみ. それ以外は None.
+    ambiguous:
+        解が一意に定まらなかったか. アンカーが同一平面に並んでいると,
+        その平面に関する鏡像は測距値ではまったく区別できない (どちらも
+        全アンカーからの距離が厳密に一致する). True のときは
+        ``position`` が鏡像側である可能性が残る —
+        ``SolveConfig(z_bounds=...)`` で片側に絞るか, ``dim=2`` で
+        高さを固定すれば解消する.
     """
 
     position: np.ndarray
@@ -283,6 +290,7 @@ class Fix:
     iterations: int = 0
     level: str = ""
     velocity: np.ndarray | None = None
+    ambiguous: bool = False
 
     def __post_init__(self) -> None:
         self.position = np.asarray(self.position, dtype=float).reshape(3)
@@ -316,5 +324,6 @@ class Fix:
             "gdop": None if not np.isfinite(self.gdop) else self.gdop,
             "excluded": list(self.excluded),
             "level": self.level,
+            "ambiguous": bool(self.ambiguous),
             "v": None if self.velocity is None else [float(v) for v in self.velocity],
         }

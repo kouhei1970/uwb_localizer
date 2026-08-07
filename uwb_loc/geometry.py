@@ -7,6 +7,7 @@
 * :func:`gdop_from_jacobian` — 測位結果に付ける GDOP
 * :func:`gdop_at` / :func:`gdop_map` — 設置前の配置検討用
 * :func:`crlb_at` — 測距 σ を与えたときの位置誤差の下限 [m]
+* :func:`anchor_plane` / :func:`mirror_point` — 同一平面配置で生じる鏡像解の扱い
 """
 
 from __future__ import annotations
@@ -15,7 +16,15 @@ import numpy as np
 
 from .types import Anchor
 
-__all__ = ["gdop_from_jacobian", "gdop_at", "gdop_map", "crlb_at", "anchor_condition"]
+__all__ = [
+    "gdop_from_jacobian",
+    "gdop_at",
+    "gdop_map",
+    "crlb_at",
+    "anchor_condition",
+    "anchor_plane",
+    "mirror_point",
+]
 
 _EPS = 1e-12
 
@@ -166,3 +175,53 @@ def anchor_condition(anchors: list[Anchor]) -> dict[str, float | bool]:
         spread=spread,
     )
     return out
+
+
+def anchor_plane(
+    anchors: list[Anchor], *, tol: float = 0.05
+) -> tuple[np.ndarray, float] | None:
+    """アンカーが同一平面上に並んでいるなら, その平面を返す.
+
+    測距値だけからは **平面に関する鏡映が区別できない**. アンカーが平面
+    ``n·x = c`` 上にあるとき, 任意の点 ``p`` とその鏡像 ``p'`` は
+    すべてのアンカーからの距離が厳密に等しくなるためで, これはアルゴリズムの
+    出来不出来ではなく問題そのものが持つ多義性である.
+
+    天井の 4 隅だけに貼った構成がまさにこれに当たるので, その場合は
+    ``SolveConfig(z_bounds=...)`` で片側に絞るか, ``dim=2`` で高さを
+    固定して解く必要がある.
+
+    Parameters
+    ----------
+    anchors:
+        アンカー一覧 (``enabled`` が False のものは無視).
+    tol:
+        同一平面とみなす許容量. 全体の広がりに対する相対値.
+
+    Returns
+    -------
+    tuple[np.ndarray, float] | None
+        ``(単位法線, オフセット)``. 同一平面でなければ None.
+        アンカーが 3 台未満のときも None (平面が決まらない).
+    """
+    pts = np.array([a.position for a in anchors if a.enabled], dtype=float)
+    if len(pts) < 3:
+        return None
+    center = pts.mean(axis=0)
+    centered = pts - center
+    # 最小特異値の方向が平面の法線. その方向の広がりが十分小さければ同一平面.
+    _, sv, vt = np.linalg.svd(centered)
+    spread = float(sv[0]) / np.sqrt(len(pts))
+    if spread < _EPS:
+        return None
+    if float(sv[-1]) / np.sqrt(len(pts)) > tol * spread:
+        return None
+    normal = vt[-1] / np.linalg.norm(vt[-1])
+    return normal, float(normal @ center)
+
+
+def mirror_point(p: np.ndarray, normal: np.ndarray, offset: float) -> np.ndarray:
+    """平面 ``normal·x = offset`` に関して点を鏡映する."""
+    p = np.asarray(p, dtype=float)
+    normal = np.asarray(normal, dtype=float)
+    return p - 2.0 * (float(normal @ p) - offset) * normal

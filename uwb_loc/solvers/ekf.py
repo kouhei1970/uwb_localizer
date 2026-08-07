@@ -103,11 +103,16 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
             self._init.set_anchors(anchors)
 
     def reset(self) -> None:
+        super().reset()
         self.x = np.zeros(self.nx)
         self.P = np.eye(self.nx) * 1e6
         self.t: float | None = None
         self._rejects = 0
         self._initialized = False
+        # 立ち上げ時に鏡像解が決められなかったかどうか. フィルタは連続性で
+        # 側を保つだけなので, 一度どちらか分からないまま始まったら, その track
+        # 全体が鏡像側である可能性が残り続ける.
+        self._ambiguous = False
         if getattr(self, "_init", None) is not None:
             self._init.reset()
 
@@ -264,6 +269,9 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
             self.P[sl, sl] = np.eye(self.nd) * (10.0 ** (2 - k))
         self._initialized = True
         self._rejects = 0
+        # 立ち上げに使ったスナップショットが鏡像を決められなかったなら,
+        # この track はまるごと鏡像側の可能性がある.
+        self._ambiguous = bool(fix.ambiguous)
         return True
 
     def _diagnostics(
@@ -314,5 +322,6 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
             gdop=g,
             excluded=excluded,
             level=self.level,
+            ambiguous=self._ambiguous,
             velocity=self._velocity(),
         )

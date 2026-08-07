@@ -226,6 +226,8 @@ class Lv0Trilateration(PositionEstimator):
         if p is None:
             return Fix.failed(batch.t, n_total, self.level)
         p = self.config.project(p)
+        p, _, ambiguous = self.resolve_mirror(p)
+        self._remember_side(p)
 
         e, jac, _ = self.model.assemble(p, meas)
         cov = _cov_from_jacobian(jac, sig, self.config.free_mask)
@@ -239,6 +241,7 @@ class Lv0Trilateration(PositionEstimator):
             residual_rms=float(np.sqrt(np.mean(e**2))),
             gdop=gdop_from_jacobian(jac, self.config.free_mask),
             level=self.level,
+            ambiguous=ambiguous,
         )
 
 
@@ -294,6 +297,7 @@ class Lv1WeightedNLS(PositionEstimator):
         self._last: np.ndarray | None = None
 
     def reset(self) -> None:
+        super().reset()          # 鏡像解の「どちら側か」も忘れる
         self._last = None
 
     # ------------------------------------------------------------------
@@ -343,10 +347,16 @@ class Lv1WeightedNLS(PositionEstimator):
                 self._last = None
                 return Fix.failed(batch.t, n_total, self.level)
 
-        self._last = res.position.copy()
+        # 同一平面配置で生じる鏡像解を片側に寄せる. 鏡像は全アンカーからの距離が
+        # 完全に一致するので残差では選べず, 位置と共分散を鏡映するだけでよい
+        # (残差 RMS と GDOP は鏡映で不変).
+        position, covariance, ambiguous = self.resolve_mirror(res.position, res.covariance)
+        self._remember_side(position)
+
+        self._last = position.copy()
         return Fix(
-            position=res.position,
-            covariance=res.covariance,
+            position=position,
+            covariance=covariance,
             t=batch.t,
             ok=True,
             n_used=len(meas),
@@ -356,6 +366,7 @@ class Lv1WeightedNLS(PositionEstimator):
             excluded=excluded,
             iterations=res.iterations,
             level=self.level,
+            ambiguous=ambiguous,
         )
 
     # ------------------------------------------------------------------
