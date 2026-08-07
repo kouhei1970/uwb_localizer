@@ -385,11 +385,36 @@ def _defaults() -> dict[str, Any]:
     }
 
 
+def _lan_address() -> str | None:
+    """LAN 側の IP を調べる (スマホから開くとき用).
+
+    外向きのソケットを作って自分側のアドレスを見るだけで, 実際の通信はしない.
+    """
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # TEST-NET-1 (到達しなくてよい)
+            return str(s.getsockname()[0])
+    except OSError:  # pragma: no cover - ネットワーク構成依存
+        return None
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
-    """UI を起動する (Ctrl-C で終了)."""
+    """UI を起動する (Ctrl-C で終了).
+
+    ``host="0.0.0.0"`` にすると同じ LAN の端末 (スマホ・タブレット) からも
+    開ける. 認証は一切ないので, 信用できるネットワークでだけ使うこと.
+    """
     httpd = ThreadingHTTPServer((host, port), make_app())
     url = f"http://{host}:{port}"
     print(f"UWB 測位 UI: {url}")
+    if host in ("0.0.0.0", "::"):
+        lan = _lan_address()
+        if lan:
+            print(f"  同じ LAN の端末からは http://{lan}:{port}")
+        print("  警告: LAN 全体に公開されます (認証なし)。信用できる回線でのみ使ってください。")
+        open_browser = False
     if open_browser:
         try:
             import webbrowser

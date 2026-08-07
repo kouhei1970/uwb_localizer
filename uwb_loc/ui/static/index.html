@@ -29,8 +29,19 @@ header .sub{color:var(--dim);font-size:12px}
   color:var(--dim);cursor:pointer;font-size:12px}
 .tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
 main{display:grid;grid-template-columns:290px 1fr;gap:12px;padding:12px;align-items:start}
-@media(max-width:900px){main{grid-template-columns:1fr}}
 .side{display:flex;flex-direction:column;gap:10px;position:sticky;top:56px}
+/* スマホ・タブレット: 1 列にして、サイドバーの sticky を解除する
+   (1 列のままだと画面上部に貼りついて図を覆ってしまう) */
+@media(max-width:900px){
+  main{grid-template-columns:1fr;padding:8px;gap:8px}
+  .side{position:static}
+  header{flex-wrap:wrap;gap:8px;padding:8px 10px}
+  .tabs{margin-left:0;width:100%}
+  .tab{flex:1}
+  /* iOS は 16px 未満の入力欄にフォーカスすると自動でズームするので防ぐ */
+  input[type=number],input[type=text],select{font-size:16px}
+  .anchor-list{max-height:none}
+}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .card h2{font-size:12px;margin:0 0 8px;color:var(--dim);font-weight:600;letter-spacing:.04em}
 .row{display:flex;align-items:center;gap:8px;margin:5px 0}
@@ -85,7 +96,8 @@ th{color:var(--dim);font-weight:500;font-size:11px}
 <div class="side">
   <div class="card">
     <button class="primary" id="run" style="width:100%">実行</button>
-    <div class="note" id="runNote">アンカーは平面図上でドラッグして動かせます。Shift+クリックで削除、空白をクリックで追加。</div>
+    <div class="note" id="runNote">アンカーは平面図上でドラッグして動かせます (指でも可)。
+      空いた場所をクリック／タップで追加。削除は Shift+クリック、または下の一覧の ×。</div>
   </div>
 
   <div class="card">
@@ -325,8 +337,13 @@ function renderAnchors(){
 /* ---------------------------------------------------------------- 描画基盤 */
 function setup(cv){
   const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth, h = +cv.getAttribute("height");
-  cv.width = w*dpr; cv.height = h*dpr;
+  // 論理高さは最初の一度だけ属性から読んで覚える。毎回読み直すと
+  // 直前に書き込んだ h*dpr を拾ってしまい、高 DPI 端末 (Retina Mac は 2、
+  // スマホは 3) で描画のたびにキャンバスが dpr 倍ずつ伸びていく。
+  if(cv._h === undefined) cv._h = +cv.getAttribute("height");
+  const w = cv.clientWidth, h = cv._h;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  cv.style.height = h + "px";   // 属性由来の高さで伸びないよう CSS 側も固定
   const g = cv.getContext("2d");
   g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,w,h);
@@ -442,27 +459,56 @@ function drawPlan(){
   }
 }
 
-/* 平面図でのアンカー操作 */
+/* 平面図でのアンカー操作 (マウス・タッチ・ペン共通).
+   Pointer Events を使うので、デバイスごとに分岐しなくてよい。
+   タッチ端末では
+     - アンカーを掴んで動かす: そのまま指でドラッグ (掴んでいる間だけ
+       touch-action を切ってページのスクロールを止める)
+     - 空いた場所に追加: 短くタップ (指が動いたらスクロール扱いにして追加しない)
+     - 削除: Shift が無いので、左のアンカー一覧の × を使う */
 (function(){
-  const cv = $("#plan"); let drag = -1;
+  const cv = $("#plan");
+  let drag = -1, startXY = null, startT = 0, moved = false;
+  const TAP_PX = 12, TAP_MS = 600, HIT_M = 0.35;
+
   const at = ev => { const r = cv.getBoundingClientRect();
     return cv._m.inv(ev.clientX-r.left, ev.clientY-r.top); };
-  const near = ([x,y]) => anchors.findIndex(a=>Math.hypot(a.p[0]-x,a.p[1]-y) < 0.35);
-  cv.addEventListener("mousedown", ev=>{
+  const near = ([x,y]) => anchors.findIndex(a=>Math.hypot(a.p[0]-x,a.p[1]-y) < HIT_M);
+
+  cv.addEventListener("pointerdown", ev=>{
+    startXY = [ev.clientX, ev.clientY]; startT = Date.now(); moved = false;
     const w = at(ev), i = near(w);
-    if(ev.shiftKey){ if(i>=0){ anchors.splice(i,1); renderAnchors(); } return; }
-    if(i>=0){ drag=i; return; }
-    const [,, lz] = room();
-    anchors.push({id:"A"+anchors.length, p:[+w[0].toFixed(2), +w[1].toFixed(2), lz-0.2]});
-    renderAnchors();
+    if(ev.shiftKey){ if(i>=0){ anchors.splice(i,1); renderAnchors(); } startXY=null; return; }
+    if(i>=0){
+      drag = i;
+      cv.style.touchAction = "none";      // ドラッグ中だけスクロールを止める
+      cv.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    }
   });
-  window.addEventListener("mousemove", ev=>{
-    if(drag<0) return;
+
+  cv.addEventListener("pointermove", ev=>{
+    if(startXY && Math.hypot(ev.clientX-startXY[0], ev.clientY-startXY[1]) > TAP_PX) moved = true;
+    if(drag < 0) return;
     const w = at(ev);
     anchors[drag].p[0] = +w[0].toFixed(2); anchors[drag].p[1] = +w[1].toFixed(2);
     renderAnchors();
+    ev.preventDefault();
   });
-  window.addEventListener("mouseup", ()=>drag=-1);
+
+  const end = ev => {
+    if(drag < 0 && startXY && !moved && Date.now()-startT < TAP_MS){
+      // 何も掴まずに短くタップ → その位置にアンカーを追加
+      const w = at(ev), [,, lz] = room();
+      if(near(w) < 0){
+        anchors.push({id:"A"+anchors.length, p:[+w[0].toFixed(2), +w[1].toFixed(2), lz-0.2]});
+        renderAnchors();
+      }
+    }
+    drag = -1; startXY = null; cv.style.touchAction = "";
+  };
+  cv.addEventListener("pointerup", end);
+  cv.addEventListener("pointercancel", ()=>{ drag=-1; startXY=null; cv.style.touchAction=""; });
 })();
 
 /* ---------------------------------------------------------------- 側面図 */
@@ -588,6 +634,10 @@ async function run(){
     $("#tnow").textContent = data.t[data.t.length-1].toFixed(1)+" s";
     redraw(); drawTable();
     $("#status").textContent = `${data.t.length} エポック / ${data.t[data.t.length-1].toFixed(0)} 秒`;
+    // 1 列レイアウト (スマホ) では設定パネルが長く、押しても結果が画面外なので
+    // 図まで送ってやる。横並びのときは何も動かさない。
+    if(window.innerWidth <= 900)
+      $("#plan").scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){ $("#status").textContent = "通信エラー: " + e; }
   finally{ btn.disabled = false; }
 }
