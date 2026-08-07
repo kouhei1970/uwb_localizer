@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uwb_loc"
+version = "0.1.0"
+description = "チップ非依存の UWB 屋内測位ライブラリ (HAL 抽象 + Lv0-Lv3 測位 + シミュレータ + UI)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# C への移植を前提にしているので scipy には依存しない.
+# Gauss-Newton も EKF も Beck 法も自前で実装してある.
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+# JsonLinesHal.from_serial を使うときだけ必要 (ファイル/TCP なら不要).
+serial = ["pyserial>=3.5"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+uwb-loc = "uwb_loc.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["uwb_loc*"]
+
+[tool.setuptools.package-data]
+uwb_loc = ["ui/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

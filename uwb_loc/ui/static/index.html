@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UWB 測位シミュレータ</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#0f1216; --panel:#171b21; --panel2:#1d222a; --line:#2a313b;
+  --fg:#e6e9ee; --dim:#93a0b1; --accent:#4aa3ff;
+  --truth:#98a2b3; --lv0:#f2994a; --lv1:#56ccf2; --lv2:#6fcf97; --lv3:#c084fc;
+  --warn:#f2c14e; --bad:#ef6a6a;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef1f5; --line:#d8dee6;
+         --fg:#1a1f26; --dim:#5b6673; --truth:#5b6673; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:13px;line-height:1.5}
+header{display:flex;align-items:center;gap:14px;padding:10px 16px;
+  border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:10}
+header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.02em}
+header .sub{color:var(--dim);font-size:12px}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{padding:5px 12px;border-radius:6px;border:1px solid var(--line);background:transparent;
+  color:var(--dim);cursor:pointer;font-size:12px}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+main{display:grid;grid-template-columns:290px 1fr;gap:12px;padding:12px;align-items:start}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:10px;position:sticky;top:56px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.card h2{font-size:12px;margin:0 0 8px;color:var(--dim);font-weight:600;letter-spacing:.04em}
+.row{display:flex;align-items:center;gap:8px;margin:5px 0}
+.row label{flex:1;color:var(--dim);font-size:12px}
+input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line);
+  color:var(--fg);border-radius:5px;padding:3px 6px;font-size:12px;width:74px;font-variant-numeric:tabular-nums}
+input[type=range]{width:110px;accent-color:var(--accent)}
+input[type=checkbox]{accent-color:var(--accent)}
+button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:6px;
+  padding:5px 10px;cursor:pointer;font-size:12px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:disabled{opacity:.5;cursor:default}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:1200px){.grid{grid-template-columns:1fr}}
+canvas{width:100%;display:block;border-radius:6px;background:var(--panel2);cursor:crosshair}
+.panel-title{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.panel-title h3{font-size:12px;margin:0;font-weight:600}
+.panel-title .hint{color:var(--dim);font-size:11px;margin-left:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:500;font-size:11px}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--dim);margin-top:6px}
+.anchor-list{max-height:150px;overflow:auto;font-size:11px}
+.anchor-list .row{margin:2px 0}
+.anchor-list input{width:52px;padding:2px 4px}
+.note{color:var(--dim);font-size:11px;margin-top:6px;line-height:1.6}
+.pill{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+.pill.bad{color:var(--bad);border-color:var(--bad)}
+.hidden{display:none !important}
+.playbar{display:flex;align-items:center;gap:10px;margin-top:8px}
+.playbar input[type=range]{flex:1;width:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>UWB 測位シミュレータ</h1>
+  <span class="sub" id="status">準備中…</span>
+  <div class="tabs">
+    <button class="tab on" data-tab="sim">シミュレーション</button>
+    <button class="tab" data-tab="live">ライブ (実機)</button>
+  </div>
+</header>
+
+<main>
+<!-- ============================================================ 左サイドバー -->
+<div class="side">
+  <div class="card">
+    <button class="primary" id="run" style="width:100%">実行</button>
+    <div class="note" id="runNote">アンカーは平面図上でドラッグして動かせます。Shift+クリックで削除、空白をクリックで追加。</div>
+  </div>
+
+  <div class="card">
+    <h2>部屋とアンカー</h2>
+    <div class="row"><label>部屋 X / Y / Z [m]</label></div>
+    <div class="row">
+      <input type="number" id="roomX" value="8" step="0.5" min="1">
+      <input type="number" id="roomY" value="6" step="0.5" min="1">
+      <input type="number" id="roomZ" value="2.6" step="0.1" min="1">
+    </div>
+    <div class="row" style="flex-wrap:wrap;gap:5px">
+      <button data-preset="8">上下8点</button>
+      <button data-preset="4">天井4点</button>
+      <button data-preset="6">天井4+床2</button>
+      <button data-preset="0">全消去</button>
+    </div>
+    <div class="anchor-list" id="anchorList"></div>
+    <div class="note" id="anchorNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>測距の誤差モデル</h2>
+    <div class="row"><label>σ0 [m]</label><input type="range" id="sigma0" min="0" max="0.5" step="0.01" value="0.08"><span class="pill" id="sigma0v">0.08</span></div>
+    <div class="row"><label>σ 距離比例 [m/m]</label><input type="range" id="sigmaPerM" min="0" max="0.02" step="0.001" value="0.004"><span class="pill" id="sigmaPerMv">0.004</span></div>
+    <div class="row"><label>NLOS 確率</label><input type="range" id="nlosProb" min="0" max="0.8" step="0.01" value="0.15"><span class="pill" id="nlosProbv">0.15</span></div>
+    <div class="row"><label>NLOS 平均バイアス [m]</label><input type="range" id="nlosBias" min="0" max="3" step="0.05" value="0.8"><span class="pill" id="nlosBiasv">0.80</span></div>
+    <div class="row"><label>NLOS 継続 [s]</label><input type="range" id="nlosHold" min="0.1" max="6" step="0.1" value="1.5"><span class="pill" id="nlosHoldv">1.5</span></div>
+    <div class="row"><label>ロス率</label><input type="range" id="lossRate" min="0" max="0.6" step="0.01" value="0.03"><span class="pill" id="lossRatev">0.03</span></div>
+    <div class="row"><label>アンテナ遅延 [m]</label><input type="range" id="antDelay" min="0" max="1" step="0.01" value="0"><span class="pill" id="antDelayv">0.00</span></div>
+    <div class="row"><label>設置座標誤差 [m]</label><input type="range" id="anchErr" min="0" max="0.5" step="0.01" value="0"><span class="pill" id="anchErrv">0.00</span></div>
+    <div class="row"><label>σ を申告する</label><input type="checkbox" id="repSigma" checked></div>
+    <div class="row"><label>品質値を申告する</label><input type="checkbox" id="repQual" checked></div>
+    <div class="note">アンテナ遅延と設置座標誤差は測位側に知らせない。設営の失敗がどれだけ効くかを見るためのもの。</div>
+  </div>
+
+  <div class="card">
+    <h2>タグの動き</h2>
+    <div class="row"><label>軌道</label>
+      <select id="trajType">
+        <option value="figure8">8 の字</option>
+        <option value="circle">円</option>
+        <option value="line">直線往復</option>
+        <option value="random_walk">ランダムウォーク</option>
+        <option value="static">静止</option>
+      </select></div>
+    <div class="row"><label>大きさ [m]</label><input type="number" id="trajSize" value="2" step="0.25"></div>
+    <div class="row"><label>周期 [s]</label><input type="number" id="trajPeriod" value="24" step="1"></div>
+    <div class="row"><label>高さ [m]</label><input type="number" id="trajZ" value="1.2" step="0.1"></div>
+    <div class="row"><label>上下動 [m]</label><input type="number" id="trajZamp" value="0.3" step="0.1"></div>
+  </div>
+
+  <div class="card">
+    <h2>測位の設定</h2>
+    <div class="row"><label>観測方式</label>
+      <select id="kind"><option value="range">DS-TWR (距離)</option><option value="tdoa">TDoA (距離差)</option></select></div>
+    <div class="row"><label>解く次元</label>
+      <select id="dim"><option value="3">3D</option><option value="2">2D (高さ固定)</option></select></div>
+    <div class="row"><label>固定高さ [m]</label><input type="number" id="zFixed" value="1.2" step="0.1"></div>
+    <div class="row"><label>レベル</label></div>
+    <div class="row" id="levels" style="flex-wrap:wrap;gap:8px"></div>
+    <div class="row"><label>EKF 運動モデル</label>
+      <select id="motion"><option value="cv">等速 CV</option><option value="ca">等加速 CA</option></select></div>
+    <div class="row"><label>EKF σa [m/s²]</label><input type="range" id="sigmaA" min="0.05" max="8" step="0.05" value="1"><span class="pill" id="sigmaAv">1.00</span></div>
+    <div class="row"><label>EKF ゲート [σ]</label><input type="range" id="gate" min="1" max="8" step="0.1" value="3"><span class="pill" id="gatev">3.0</span></div>
+  </div>
+
+  <div class="card">
+    <h2>実行条件</h2>
+    <div class="row"><label>時間 [s]</label><input type="number" id="duration" value="40" step="5" min="1"></div>
+    <div class="row"><label>更新レート [Hz]</label><input type="number" id="rate" value="10" step="1" min="1"></div>
+    <div class="row"><label>乱数種</label><input type="number" id="seed" value="0" step="1"></div>
+    <div class="row"><label>GDOP 評価高さ [m]</label><input type="number" id="gdopZ" value="1.2" step="0.1"></div>
+  </div>
+</div>
+
+<!-- ============================================================ 右: シミュレーション -->
+<div id="tab-sim">
+  <div class="grid">
+    <div class="card">
+      <div class="panel-title"><h3>平面図 (X-Y)</h3>
+        <span class="hint"><label><input type="checkbox" id="showGdop"> GDOP</label>
+        <label style="margin-left:8px"><input type="checkbox" id="showAll" checked> 全軌跡</label></span></div>
+      <canvas id="plan" height="420"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="card">
+      <div class="panel-title"><h3>側面図 (X-Z)</h3><span class="hint">高さの観測しやすさが見える</span></div>
+      <canvas id="side" height="420"></canvas>
+      <div class="playbar">
+        <button id="play">▶</button>
+        <input type="range" id="scrub" min="0" max="0" value="0">
+        <span class="pill" id="tnow">0.0 s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="panel-title"><h3>精度</h3><span class="hint" id="condNote"></span></div>
+    <table id="metrics"></table>
+    <div class="note" id="crlbNote"></div>
+  </div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card">
+      <div class="panel-title"><h3>誤差の時系列</h3><span class="hint">3 次元誤差 [m]</span></div>
+      <canvas id="errc" height="240"></canvas>
+    </div>
+    <div class="card">
+      <div class="panel-title"><h3>誤差の累積分布</h3><span class="hint">横軸 [m] / 縦軸 割合</span></div>
+      <canvas id="cdfc" height="240"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ 右: ライブ -->
+<div id="tab-live" class="hidden">
+  <div class="card">
+    <div class="panel-title"><h3>観測源</h3><span class="hint">実機は JSON Lines で流し込む (docs/UWB_PROTOCOL.md)</span></div>
+    <div class="row">
+      <label>ソース</label>
+      <select id="liveSource">
+        <option value="sim">模擬 (ハードなし)</option>
+        <option value="file">ファイル (.jsonl)</option>
+        <option value="tcp">TCP</option>
+        <option value="serial">シリアル</option>
+      </select>
+      <label style="flex:0">レベル</label>
+      <select id="liveLevel"><option>Lv0</option><option>Lv1</option><option selected>Lv2</option><option>Lv3</option></select>
+    </div>
+    <div class="row" id="liveFileRow"><label>パス</label><input type="text" id="livePath" style="width:260px" placeholder="/path/to/log.jsonl"></div>
+    <div class="row" id="liveTcpRow"><label>ホスト / ポート</label><input type="text" id="liveHost" value="127.0.0.1" style="width:120px"><input type="number" id="livePort" value="9000"></div>
+    <div class="row" id="liveSerRow"><label>ポート / ボーレート</label><input type="text" id="liveSer" value="/dev/ttyUSB0" style="width:130px"><input type="number" id="liveBaud" value="115200"></div>
+    <div class="row"><button class="primary" id="liveStart">開始</button><button id="liveStop">停止</button>
+      <span class="pill" id="liveStat">停止中</span></div>
+  </div>
+  <div class="grid" style="margin-top:12px">
+    <div class="card">
+      <div class="panel-title"><h3>平面図 (X-Y)</h3><span class="hint">直近 300 点</span></div>
+      <canvas id="livePlan" height="420"></canvas>
+    </div>
+    <div class="card">
+      <div class="panel-title"><h3>状態</h3></div>
+      <table id="liveTable"></table>
+      <div class="panel-title" style="margin-top:12px"><h3>推定 σ の推移</h3></div>
+      <canvas id="liveSig" height="180"></canvas>
+    </div>
+  </div>
+</div>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const LEVELS = ["Lv0","Lv1","Lv2","Lv3"];
+const COLOR = {Lv0:"--lv0",Lv1:"--lv1",Lv2:"--lv2",Lv3:"--lv3",truth:"--truth"};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+let anchors = [];
+let data = null;         // /api/simulate の結果
+let playing = false, playTimer = null;
+
+/* ---------------------------------------------------------------- 入力 */
+function bindSlider(id, fmt){
+  const el = $("#"+id), out = $("#"+id+"v");
+  const upd = () => out.textContent = fmt(parseFloat(el.value));
+  el.addEventListener("input", upd); upd();
+}
+bindSlider("sigma0", v=>v.toFixed(2));
+bindSlider("sigmaPerM", v=>v.toFixed(3));
+bindSlider("nlosProb", v=>v.toFixed(2));
+bindSlider("nlosBias", v=>v.toFixed(2));
+bindSlider("nlosHold", v=>v.toFixed(1));
+bindSlider("lossRate", v=>v.toFixed(2));
+bindSlider("antDelay", v=>v.toFixed(2));
+bindSlider("anchErr", v=>v.toFixed(2));
+bindSlider("sigmaA", v=>v.toFixed(2));
+bindSlider("gate", v=>v.toFixed(1));
+
+const levelBox = $("#levels");
+LEVELS.forEach(lv=>{
+  const l = document.createElement("label");
+  l.style.cssText = "flex:0 0 auto;color:var(--fg)";
+  l.innerHTML = `<input type="checkbox" value="${lv}" ${lv!=="Lv1"?"checked":""}>
+    <span class="sw" style="background:var(${COLOR[lv]})"></span>${lv}`;
+  levelBox.appendChild(l);
+});
+const selectedLevels = () => $$("#levels input:checked").map(i=>i.value);
+
+/* ---------------------------------------------------------------- アンカー */
+function room(){ return [+$("#roomX").value, +$("#roomY").value, +$("#roomZ").value]; }
+
+function preset(n){
+  const [lx,ly,lz] = room(), zh = lz-0.2, zl = 0.3;
+  const c = [[0.2,0.2],[lx-0.2,0.2],[lx-0.2,ly-0.2],[0.2,ly-0.2]];
+  anchors = [];
+  if(n === 0){ renderAnchors(); return; }
+  c.forEach((p,i)=>{
+    anchors.push({id:"A"+anchors.length, p:[p[0],p[1],zh]});
+    if(n === 8 || (n === 6 && i < 2)) anchors.push({id:"A"+anchors.length, p:[p[0],p[1],zl]});
+  });
+  anchors.forEach((a,i)=>a.id="A"+i);
+  renderAnchors();
+}
+$$("[data-preset]").forEach(b=>b.onclick=()=>preset(+b.dataset.preset));
+
+function renderAnchors(){
+  const box = $("#anchorList"); box.innerHTML = "";
+  anchors.forEach((a,i)=>{
+    const d = document.createElement("div"); d.className = "row";
+    d.innerHTML = `<label style="flex:0 0 34px">${a.id}</label>`;
+    [0,1,2].forEach(k=>{
+      const inp = document.createElement("input");
+      inp.type="number"; inp.step="0.1"; inp.value=a.p[k].toFixed(2);
+      inp.oninput = ()=>{ a.p[k] = +inp.value; drawPlan(); drawSide(); };
+      d.appendChild(inp);
+    });
+    const del = document.createElement("button");
+    del.textContent="×"; del.style.padding="1px 7px";
+    del.onclick = ()=>{ anchors.splice(i,1); renderAnchors(); };
+    d.appendChild(del);
+    box.appendChild(d);
+  });
+  const n = anchors.length;
+  let note = `${n} 台`;
+  if(n >= 3){
+    const P = anchors.map(a=>a.p), m=[0,1,2].map(k=>P.reduce((s,p)=>s+p[k],0)/n);
+    const zs = P.map(p=>p[2]), spread = Math.max(...zs)-Math.min(...zs);
+    note += spread < 0.3 ? " — <span class='pill warn'>同一平面: 3D では高さがほぼ解けない</span>"
+                         : ` — 高さの広がり ${spread.toFixed(1)} m`;
+  }
+  if(n < 4) note += " — <span class='pill bad'>3D には 4 台以上必要</span>";
+  $("#anchorNote").innerHTML = note;
+  drawPlan(); drawSide();
+}
+
+/* ---------------------------------------------------------------- 描画基盤 */
+function setup(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = +cv.getAttribute("height");
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  return {g,w,h};
+}
+/* equal=true なら縦横のスケールを揃える (平面図・側面図は必須).
+   時系列やCDFは軸の意味が違うので equal=false で枠いっぱいに引き伸ばす. */
+function mapper(w,h,x0,x1,y0,y1,equal,pad){
+  pad = pad || {l:38,r:14,t:14,b:34};
+  let sx = (w-pad.l-pad.r)/Math.max(x1-x0,1e-9), sy = (h-pad.t-pad.b)/Math.max(y1-y0,1e-9);
+  if(equal !== false){ sx = sy = Math.min(sx,sy); }
+  const ox = pad.l + ((w-pad.l-pad.r) - sx*(x1-x0))/2;
+  const oy = h-pad.b - ((h-pad.t-pad.b) - sy*(y1-y0))/2;
+  return {
+    X: x => ox + (x-x0)*sx,
+    Y: y => oy - (y-y0)*sy,
+    inv: (px,py) => [x0 + (px-ox)/sx, y0 + (oy-py)/sy],
+    s: sx
+  };
+}
+function axes(g,w,h,m,x0,x1,y0,y1,xl,yl){
+  g.strokeStyle = css("--line"); g.fillStyle = css("--dim");
+  g.lineWidth = 1; g.font = "10px ui-monospace,monospace";
+  g.beginPath(); g.rect(m.X(x0),m.Y(y1),m.X(x1)-m.X(x0),m.Y(y0)-m.Y(y1)); g.stroke();
+  const ticks = (a,b,n)=>{const o=[];for(let i=0;i<=n;i++)o.push(a+(b-a)*i/n);return o;};
+  const fmt = v => Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
+  ticks(x0,x1,5).forEach(v=>{
+    g.globalAlpha=.3; g.beginPath(); g.moveTo(m.X(v),m.Y(y0)); g.lineTo(m.X(v),m.Y(y1)); g.stroke();
+    g.globalAlpha=1; g.textAlign="center"; g.fillText(fmt(v), m.X(v), m.Y(y0)+12);
+  });
+  ticks(y0,y1,4).forEach(v=>{
+    g.globalAlpha=.3; g.beginPath(); g.moveTo(m.X(x0),m.Y(v)); g.lineTo(m.X(x1),m.Y(v)); g.stroke();
+    g.globalAlpha=1; g.textAlign="right"; g.fillText(fmt(v), m.X(x0)-5, m.Y(v)+3);
+  });
+  // 軸名は目盛りとぶつからない位置に置く.
+  if(xl){ g.textAlign="center"; g.fillText(xl, (m.X(x0)+m.X(x1))/2, h-6); }
+  if(yl){ g.textAlign="left"; g.fillText(yl, 3, 11); }
+}
+function poly(g,pts,color,width,alpha){
+  g.strokeStyle=color; g.lineWidth=width||1.5; g.globalAlpha=alpha===undefined?1:alpha;
+  g.beginPath(); let started=false;
+  pts.forEach(p=>{ if(!p||p[0]===null||!isFinite(p[0])){started=false;return;}
+    if(!started){g.moveTo(p[0],p[1]);started=true;} else g.lineTo(p[0],p[1]); });
+  g.stroke(); g.globalAlpha=1;
+}
+function gdopColor(v){
+  const t = Math.max(0, Math.min(1, (v-1)/5));
+  const r = Math.round(30+225*t), gg = Math.round(120+60*(1-t)), b = Math.round(200-160*t);
+  return `rgba(${r},${gg},${b},0.42)`;
+}
+
+/* ---------------------------------------------------------------- 平面図 */
+function drawPlan(){
+  const cv = $("#plan"); const {g,w,h} = setup(cv);
+  const [lx,ly] = room();
+  const m = mapper(w,h,0,lx,0,ly);
+  cv._m = m;
+
+  if($("#showGdop").checked && data && data.gdop){
+    const gd = data.gdop, nx = gd.x.length, ny = gd.y.length;
+    const cw = m.X(gd.x[1])-m.X(gd.x[0]), ch = m.Y(gd.y[0])-m.Y(gd.y[1]);
+    for(let j=0;j<ny;j++) for(let i=0;i<nx;i++){
+      g.fillStyle = gdopColor(gd.g[j][i]);
+      // 継ぎ目が出ないよう, セルを 1 px ぶん大きめに塗る.
+      g.fillRect(Math.floor(m.X(gd.x[i])-cw/2), Math.floor(m.Y(gd.y[j])-ch/2),
+                 Math.ceil(cw)+1, Math.ceil(ch)+1);
+    }
+  }
+  axes(g,w,h,m,0,lx,0,ly,"x [m]","y [m]");
+
+  if(data){
+    const idx = +$("#scrub").value;
+    if($("#showAll").checked)
+      poly(g, data.truth.map(p=>[m.X(p[0]),m.Y(p[1])]), css("--truth"), 2.2, .85);
+    selectedLevels().forEach(lv=>{
+      const r = data.results[lv]; if(!r) return;
+      if($("#showAll").checked)
+        poly(g, r.p.map(p=>p&&p[0]!==null?[m.X(p[0]),m.Y(p[1])]:null), css(COLOR[lv]), 1.2, .75);
+      const p = r.p[idx];
+      if(p && p[0]!==null){
+        g.fillStyle = css(COLOR[lv]);
+        g.beginPath(); g.arc(m.X(p[0]),m.Y(p[1]),4,0,7); g.fill();
+      }
+    });
+    const tp = data.truth[idx];
+    if(tp){ g.strokeStyle=css("--fg"); g.lineWidth=2;
+      g.beginPath(); g.arc(m.X(tp[0]),m.Y(tp[1]),6,0,7); g.stroke(); }
+  }
+
+  // 上下 2 段のアンカーは平面図では同じ位置に重なるので, ラベルを縦にずらす.
+  const seen = {};
+  anchors.forEach(a=>{
+    const x=m.X(a.p[0]), y=m.Y(a.p[1]);
+    const key = x.toFixed(0)+","+y.toFixed(0);
+    const k = seen[key] = (seen[key]||0)+1;
+    g.fillStyle=css("--accent"); g.strokeStyle=css("--panel"); g.lineWidth=2;
+    g.beginPath(); g.rect(x-5,y-5,10,10); g.fill(); g.stroke();
+    g.fillStyle=css("--dim"); g.font="10px ui-monospace,monospace";
+    const right = x < (m.X(0)+m.X(lx))/2;
+    g.textAlign = right ? "left" : "right";
+    g.fillText(`${a.id} z${a.p[2].toFixed(1)}`, x + (right?9:-9), y+3 + (k-1)*11);
+  });
+
+  if($("#showGdop").checked && data && data.gdop){
+    const bx = m.X(lx)-118, by = m.Y(0)-16;
+    for(let i=0;i<100;i++){
+      g.fillStyle = gdopColor(1 + 5*i/99).replace("0.42","0.95");
+      g.fillRect(bx+i, by, 1.4, 8);
+    }
+    g.fillStyle=css("--fg"); g.font="9px ui-monospace,monospace";
+    g.textAlign="left";  g.fillText("GDOP 1", bx, by-3);
+    g.textAlign="right"; g.fillText("6+", bx+100, by-3);
+  }
+}
+
+/* 平面図でのアンカー操作 */
+(function(){
+  const cv = $("#plan"); let drag = -1;
+  const at = ev => { const r = cv.getBoundingClientRect();
+    return cv._m.inv(ev.clientX-r.left, ev.clientY-r.top); };
+  const near = ([x,y]) => anchors.findIndex(a=>Math.hypot(a.p[0]-x,a.p[1]-y) < 0.35);
+  cv.addEventListener("mousedown", ev=>{
+    const w = at(ev), i = near(w);
+    if(ev.shiftKey){ if(i>=0){ anchors.splice(i,1); renderAnchors(); } return; }
+    if(i>=0){ drag=i; return; }
+    const [,, lz] = room();
+    anchors.push({id:"A"+anchors.length, p:[+w[0].toFixed(2), +w[1].toFixed(2), lz-0.2]});
+    renderAnchors();
+  });
+  window.addEventListener("mousemove", ev=>{
+    if(drag<0) return;
+    const w = at(ev);
+    anchors[drag].p[0] = +w[0].toFixed(2); anchors[drag].p[1] = +w[1].toFixed(2);
+    renderAnchors();
+  });
+  window.addEventListener("mouseup", ()=>drag=-1);
+})();
+
+/* ---------------------------------------------------------------- 側面図 */
+function drawSide(){
+  const cv = $("#side"); const {g,w,h} = setup(cv);
+  const [lx,,lz] = room();
+  const m = mapper(w,h,0,lx,0,lz);
+  axes(g,w,h,m,0,lx,0,lz,"x [m]","z [m]");
+  if(data){
+    const idx = +$("#scrub").value;
+    if($("#showAll").checked)
+      poly(g, data.truth.map(p=>[m.X(p[0]),m.Y(p[2])]), css("--truth"), 2.2, .85);
+    selectedLevels().forEach(lv=>{
+      const r = data.results[lv]; if(!r) return;
+      if($("#showAll").checked)
+        poly(g, r.p.map(p=>p&&p[0]!==null?[m.X(p[0]),m.Y(p[2])]:null), css(COLOR[lv]), 1.2, .75);
+      const p = r.p[idx];
+      if(p && p[0]!==null){ g.fillStyle=css(COLOR[lv]);
+        g.beginPath(); g.arc(m.X(p[0]),m.Y(p[2]),4,0,7); g.fill(); }
+    });
+    const tp = data.truth[idx];
+    if(tp){ g.strokeStyle=css("--fg"); g.lineWidth=2;
+      g.beginPath(); g.arc(m.X(tp[0]),m.Y(tp[2]),6,0,7); g.stroke(); }
+  }
+  anchors.forEach(a=>{
+    g.fillStyle=css("--accent");
+    g.beginPath(); g.rect(m.X(a.p[0])-4,m.Y(a.p[2])-4,8,8); g.fill();
+  });
+}
+
+/* ---------------------------------------------------------------- 折れ線図 */
+function drawErr(){
+  const cv = $("#errc"); const {g,w,h} = setup(cv);
+  if(!data){ return; }
+  const t = data.t, lv = selectedLevels();
+  let ymax = 0.2;
+  lv.forEach(l=>{ const r=data.results[l]; if(r) r.err.forEach(e=>{ if(e!==null&&e>ymax) ymax=e; }); });
+  ymax = Math.min(ymax, 6);
+  const m = mapper(w,h,t[0],t[t.length-1],0,ymax,false);
+  axes(g,w,h,m,t[0],t[t.length-1],0,ymax,"t [s]","err [m]");
+  lv.forEach(l=>{
+    const r = data.results[l]; if(!r) return;
+    poly(g, r.err.map((e,i)=> e===null?null:[m.X(t[i]),m.Y(Math.min(e,ymax))]), css(COLOR[l]), 1.3, .9);
+  });
+}
+function drawCdf(){
+  const cv = $("#cdfc"); const {g,w,h} = setup(cv);
+  if(!data) return;
+  const lv = selectedLevels();
+  let xmax = 0.1;
+  lv.forEach(l=>{ const c=data.cdf[l]; if(c&&c.x.length) xmax=Math.max(xmax, c.x[c.x.length-1]); });
+  xmax = Math.min(xmax, 5);
+  const m = mapper(w,h,0,xmax,0,1,false);
+  axes(g,w,h,m,0,xmax,0,1,"err [m]","P");
+  lv.forEach(l=>{
+    const c = data.cdf[l]; if(!c) return;
+    poly(g, c.x.map((x,i)=>[m.X(Math.min(x,xmax)),m.Y(c.p[i])]), css(COLOR[l]), 1.6, .95);
+  });
+  [0.5,0.95].forEach(p=>{
+    g.strokeStyle=css("--line"); g.setLineDash([3,3]); g.globalAlpha=.8;
+    g.beginPath(); g.moveTo(m.X(0),m.Y(p)); g.lineTo(m.X(xmax),m.Y(p)); g.stroke();
+    g.setLineDash([]); g.globalAlpha=1;
+  });
+}
+
+/* ---------------------------------------------------------------- 指標表 */
+const FMT = {availability:v=>(v*100).toFixed(1)+" %"};
+const COLS = [["availability","測位率"],["rmse_3d","RMSE 3D"],["rmse_2d","RMSE 2D"],
+  ["rmse_z","RMSE z"],["cep50","CEP50"],["cep95","CEP95"],["max_3d","最大"],["bias_z","z バイアス"]];
+function drawTable(){
+  const tb = $("#metrics");
+  let html = "<tr><th>レベル</th>" + COLS.map(c=>`<th>${c[1]}</th>`).join("") + "</tr>";
+  selectedLevels().forEach(lv=>{
+    const m = data.metrics[lv]; if(!m) return;
+    html += `<tr><td><span class="sw" style="background:var(${COLOR[lv]})"></span>${lv}</td>` +
+      COLS.map(c=>{ const v = m[c[0]];
+        return `<td>${v===null||v===undefined?"—":(FMT[c[0]]?FMT[c[0]](v):v.toFixed(3))}</td>`;
+      }).join("") + "</tr>";
+  });
+  tb.innerHTML = html;
+  const ls = data.link_stats;
+  $("#crlbNote").innerHTML =
+    `理論下限 (CRLB, 軌道中心) <b>${data.crlb===null?"—":data.crlb.toFixed(3)} m</b> — ` +
+    `1 エポック分の観測だけで測位する限り、これより良くはならない。` +
+    `Lv3 は時間方向の情報も使うので下回りうる。` +
+    `1 エポックあたり平均 ${ls.mean_meas_per_epoch.toFixed(1)} 本、` +
+    `うち NLOS ${(ls.nlos_ratio*100).toFixed(0)} %。`;
+  const c = data.anchor_condition;
+  $("#condNote").innerHTML = c.coplanar
+    ? `<span class="pill warn">アンカーが同一平面: z は実質解けない</span>`
+    : `平面からの広がり ${c.planarity.toFixed(2)} m`;
+}
+
+/* ---------------------------------------------------------------- 実行 */
+function payload(){
+  const [lx,ly,lz] = room();
+  return {
+    room:[lx,ly,lz],
+    anchors: anchors.map(a=>({id:a.id,p:a.p})),
+    error:{ sigma0:+$("#sigma0").value, sigma_per_m:+$("#sigmaPerM").value,
+      nlos_prob:+$("#nlosProb").value, nlos_hold:+$("#nlosHold").value,
+      nlos_bias_mean:+$("#nlosBias").value, loss_rate:+$("#lossRate").value,
+      antenna_delay:+$("#antDelay").value, anchor_position_error:+$("#anchErr").value,
+      report_sigma:$("#repSigma").checked, report_quality:$("#repQual").checked },
+    traj:{ type:$("#trajType").value, size:+$("#trajSize").value, period:+$("#trajPeriod").value,
+      center:[lx/2, ly/2, +$("#trajZ").value], z_amp:+$("#trajZamp").value },
+    levels: selectedLevels(),
+    dim:+$("#dim").value, z_fixed:+$("#zFixed").value,
+    duration:+$("#duration").value, rate:+$("#rate").value, seed:+$("#seed").value,
+    kind:$("#kind").value, motion:$("#motion").value,
+    sigma_a:+$("#sigmaA").value, gate:+$("#gate").value, gdop_z:+$("#gdopZ").value
+  };
+}
+async function run(){
+  const btn = $("#run"); btn.disabled = true; $("#status").textContent = "計算中…";
+  try{
+    const res = await fetch("/api/simulate",{method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload())});
+    const j = await res.json();
+    if(j.error){ $("#status").textContent = "エラー: " + j.error; console.error(j.trace); return; }
+    data = j;
+    $("#scrub").max = data.t.length-1; $("#scrub").value = data.t.length-1;
+    $("#tnow").textContent = data.t[data.t.length-1].toFixed(1)+" s";
+    redraw(); drawTable();
+    $("#status").textContent = `${data.t.length} エポック / ${data.t[data.t.length-1].toFixed(0)} 秒`;
+  }catch(e){ $("#status").textContent = "通信エラー: " + e; }
+  finally{ btn.disabled = false; }
+}
+function redraw(){ drawPlan(); drawSide(); drawErr(); drawCdf(); }
+$("#run").onclick = run;
+["showGdop","showAll","dim"].forEach(id=>$("#"+id).addEventListener("change",redraw));
+levelBox.addEventListener("change",()=>{ if(data){ redraw(); drawTable(); } });
+["roomX","roomY","roomZ"].forEach(id=>$("#"+id).addEventListener("change",()=>{drawPlan();drawSide();}));
+$("#scrub").addEventListener("input",()=>{
+  if(!data) return;
+  $("#tnow").textContent = data.t[+$("#scrub").value].toFixed(1)+" s";
+  drawPlan(); drawSide();
+});
+$("#play").onclick = ()=>{
+  playing = !playing; $("#play").textContent = playing ? "❚❚" : "▶";
+  if(playing){
+    playTimer = setInterval(()=>{
+      const s = $("#scrub"); s.value = (+s.value + 1) % (+s.max + 1);
+      s.dispatchEvent(new Event("input"));
+    }, 50);
+  } else clearInterval(playTimer);
+};
+
+/* ---------------------------------------------------------------- 凡例 */
+$("#legend").innerHTML =
+  `<span><span class="sw" style="background:var(--truth)"></span>真値</span>` +
+  LEVELS.map(l=>`<span><span class="sw" style="background:var(${COLOR[l]})"></span>${l}</span>`).join("") +
+  `<span><span class="sw" style="background:var(--accent)"></span>アンカー</span>`;
+
+/* ---------------------------------------------------------------- タブ */
+$$(".tab").forEach(t=>t.onclick=()=>{
+  $$(".tab").forEach(x=>x.classList.toggle("on", x===t));
+  $("#tab-sim").classList.toggle("hidden", t.dataset.tab!=="sim");
+  $("#tab-live").classList.toggle("hidden", t.dataset.tab!=="live");
+  if(t.dataset.tab==="live") drawLive();
+});
+
+/* ---------------------------------------------------------------- ライブ */
+let liveRows = [], liveSince = 0, liveTimer = null;
+function liveSourceUI(){
+  const s = $("#liveSource").value;
+  $("#liveFileRow").classList.toggle("hidden", s!=="file");
+  $("#liveTcpRow").classList.toggle("hidden", s!=="tcp");
+  $("#liveSerRow").classList.toggle("hidden", s!=="serial");
+}
+$("#liveSource").onchange = liveSourceUI; liveSourceUI();
+
+$("#liveStart").onclick = async ()=>{
+  const body = Object.assign(payload(), {
+    source:$("#liveSource").value, level:$("#liveLevel").value,
+    path:$("#livePath").value, host:$("#liveHost").value, port:+$("#livePort").value,
+    baud:+$("#liveBaud").value
+  });
+  if(body.source==="serial") body.port = $("#liveSer").value;
+  liveRows = []; liveSince = 0;
+  const r = await fetch("/api/live/start",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j = await r.json();
+  if(j.error){ $("#liveStat").textContent = "エラー: "+j.error; return; }
+  $("#liveStat").textContent = "実行中";
+  if(liveTimer) clearInterval(liveTimer);
+  liveTimer = setInterval(pollLive, 200);
+};
+$("#liveStop").onclick = async ()=>{
+  await fetch("/api/live/stop",{method:"POST"});
+  if(liveTimer) clearInterval(liveTimer);
+  $("#liveStat").textContent = "停止中";
+};
+async function pollLive(){
+  const r = await fetch("/api/live/poll?since="+liveSince);
+  const j = await r.json();
+  if(j.error){ $("#liveStat").textContent = "エラー: "+j.error; clearInterval(liveTimer); return; }
+  liveSince = j.n;
+  liveRows = liveRows.concat(j.fixes).slice(-300);
+  if(!j.running) $("#liveStat").textContent = "停止 (源が尽きました)";
+  drawLive();
+}
+function drawLive(){
+  const cv = $("#livePlan"); const {g,w,h} = setup(cv);
+  const [lx,ly] = room();
+  const m = mapper(w,h,0,lx,0,ly);
+  axes(g,w,h,m,0,lx,0,ly,"x [m]","y [m]");
+  anchors.forEach(a=>{ g.fillStyle=css("--accent");
+    g.beginPath(); g.rect(m.X(a.p[0])-5,m.Y(a.p[1])-5,10,10); g.fill(); });
+  const truth = liveRows.filter(r=>r.truth).map(r=>[m.X(r.truth[0]),m.Y(r.truth[1])]);
+  if(truth.length) poly(g, truth, css("--truth"), 2, .8);
+  const pts = liveRows.map(r=>r.p&&r.p[0]!==null?[m.X(r.p[0]),m.Y(r.p[1])]:null);
+  poly(g, pts, css("--lv2"), 1.4, .9);
+  const last = liveRows[liveRows.length-1];
+  if(last && last.p && last.p[0]!==null){
+    g.fillStyle=css("--lv2"); g.beginPath(); g.arc(m.X(last.p[0]),m.Y(last.p[1]),5,0,7); g.fill();
+    if(last.sigma){ g.strokeStyle=css("--lv2"); g.globalAlpha=.5;
+      g.beginPath(); g.arc(m.X(last.p[0]),m.Y(last.p[1]), Math.max(last.sigma*m.s,2),0,7); g.stroke();
+      g.globalAlpha=1; }
+  }
+
+  const t = $("#liveTable");
+  if(last){
+    const f = v => v===null||v===undefined?"—":(+v).toFixed(3);
+    t.innerHTML = `<tr><th>項目</th><th>値</th></tr>` +
+      `<tr><td>時刻</td><td>${f(last.t)} s</td></tr>` +
+      `<tr><td>位置 x/y/z</td><td>${last.p.map(f).join(" / ")}</td></tr>` +
+      `<tr><td>推定 σ</td><td>${f(last.sigma)} m</td></tr>` +
+      `<tr><td>使用 / 全観測</td><td>${last.n_used} / ${last.n_total}</td></tr>` +
+      `<tr><td>残差 RMS</td><td>${f(last.residual_rms)} m</td></tr>` +
+      `<tr><td>GDOP</td><td>${f(last.gdop)}</td></tr>` +
+      `<tr><td>除外</td><td>${last.excluded.join(",")||"—"}</td></tr>` +
+      `<tr><td>受信済み</td><td>${liveSince} エポック</td></tr>`;
+  }
+  const sc = $("#liveSig"); const s2 = setup(sc);
+  const sig = liveRows.map(r=>r.sigma).filter(v=>v!==null&&v!==undefined);
+  if(sig.length>1){
+    const ymax = Math.max(...sig)*1.1 || 1;
+    const mm = mapper(s2.w,s2.h,0,liveRows.length-1,0,ymax,false);
+    axes(s2.g,s2.w,s2.h,mm,0,liveRows.length-1,0,ymax,"epoch","σ [m]");
+    poly(s2.g, liveRows.map((r,i)=>r.sigma==null?null:[mm.X(i),mm.Y(r.sigma)]), css("--lv2"),1.4,.95);
+  }
+}
+
+/* ---------------------------------------------------------------- 起動 */
+window.addEventListener("resize", ()=>{ redraw(); if(!$("#tab-live").classList.contains("hidden")) drawLive(); });
+(async ()=>{
+  try{
+    const d = await (await fetch("/api/defaults")).json();
+    $("#roomX").value=d.room[0]; $("#roomY").value=d.room[1]; $("#roomZ").value=d.room[2];
+    anchors = d.anchors.map(a=>({id:a.id,p:a.p}));
+    renderAnchors();
+    $("#status").textContent = "準備完了 — 「実行」を押してください";
+    run();
+  }catch(e){ $("#status").textContent = "初期化に失敗: "+e; preset(8); }
+})();
+</script>
+</body>
+</html>
