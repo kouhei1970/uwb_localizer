@@ -172,7 +172,7 @@ python examples/02_custom_hal.py      # 自前の UWB 用 HAL を書く
 ## 開発
 
 ```bash
-python -m pytest -q      # 46 件
+python -m pytest -q      # 52 件
 ```
 
 テストは数値の一致だけでなく、**アルゴリズムが持つべき性質**を検証している
