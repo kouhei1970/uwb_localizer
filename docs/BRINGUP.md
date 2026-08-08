@@ -143,6 +143,136 @@ for a in anchors:
 
 ---
 
+## ID と距離が取れているなら — 書き方 3 通りの最小形
+
+「UART から何か読めて、ID と距離が整理できる」ところまで来ていれば、
+あとは短い。実際に動かせる形は `examples/03_minimal_integration.py` にある。
+
+```bash
+python examples/03_minimal_integration.py
+```
+
+### A. HAL を使わない — 自分でパース済みならこれが最短
+
+**ストリームの面倒を自分で見るなら、HAL クラスは要らない。**
+`Measurement` を並べて `update()` に渡すだけ。
+
+```python
+import uwb_loc as ul
+
+anchors = [ul.Anchor("A0", [0.2, 0.2, 2.4]),
+           ul.Anchor("A1", [7.8, 0.2, 2.4]),
+           ul.Anchor("A2", [7.8, 5.8, 0.3]),
+           ul.Anchor("A3", [0.2, 5.8, 0.3])]
+
+est = ul.make_estimator("Lv2", anchors)                       # 1
+
+while True:
+    readings = my_uart_read()          # [("A0", 3.214), ("A1", 2.887), ...]  距離は m
+
+    batch = ul.MeasurementBatch(                              # 2
+        t=time.monotonic(),
+        measurements=[ul.Measurement(aid, d) for aid, d in readings])
+    fix = est.update(batch)                                   # 3
+
+    if fix.ok:
+        print(fix.position, fix.sigma)
+```
+
+**実質 3 行。** `Measurement` に必須なのは `anchor_id` と `value` [m] だけ。
+
+### B. JSON Lines — ファームウェアが 1 行 print するだけ
+
+Python 側にパースのコードを 1 行も書きたくない場合。
+
+マイコン側 (C):
+
+```c
+printf("{\"t\":%.3f,\"meas\":["
+       "{\"a\":\"A0\",\"d\":%.3f},"
+       "{\"a\":\"A1\",\"d\":%.3f},"
+       "{\"a\":\"A2\",\"d\":%.3f},"
+       "{\"a\":\"A3\",\"d\":%.3f}]}\n",
+       t_sec, d0, d1, d2, d3);
+```
+
+出てくる行:
+
+```json
+{"t":12.345,"meas":[{"a":"A0","d":3.214},{"a":"A1","d":2.887}]}
+```
+
+Python 側:
+
+```python
+hal = ul.JsonLinesHal.from_serial("/dev/ttyUSB0", 115200, anchors=anchors)
+for fix in ul.Pipeline(hal, level="Lv2").run():
+    print(fix.position, fix.sigma)
+```
+
+キーは短縮形。`a` (アンカー ID) と `d` (距離 [m]) が必須で、
+`t` (時刻 [s])、`q` (品質 0-1)、`sigma` (1σ [m]) は任意。
+アンカー座標もファームから送れる:
+
+```json
+{"type":"anchors","anchors":[{"id":"A0","p":[0.2,0.2,2.4]}]}
+```
+
+**JSON でない行は黙って捨てる**ので、起動メッセージやデバッグ出力が
+混ざっていても構わない。
+
+### C. HAL クラス — ストリームを自分で管理したいとき
+
+実装するのは `anchors` と `poll` の 2 つだけ。
+
+```python
+class MyUartHal(ul.UwbHal):
+    name = "my-uart"
+
+    def __init__(self, port, anchors):
+        self._ser = serial.Serial(port, 115200, timeout=0.1)
+        self._anchors = anchors
+
+    @property
+    def anchors(self):
+        return self._anchors
+
+    def poll(self, timeout=0.0):
+        """溜まっている観測を返す。ブロックしないこと。"""
+        out = []
+        while self._ser.in_waiting:
+            aid, dist, t = my_parse(self._ser.readline())
+            out.append(ul.MeasurementBatch(
+                t=t, measurements=[ul.Measurement(aid, dist, t=t)]))
+        return out
+
+    @property
+    def is_open(self):
+        return self._ser.is_open      # 通信が切れたら False
+```
+
+```python
+for fix in ul.Pipeline(MyUartHal("/dev/ttyUSB0", anchors), level="Lv3").run():
+    print(fix.position)
+```
+
+1 エポックに束ねなくてよい (上のように 1 本ずつ返してよい) のは、
+Lv3 が測距を届いた順に処理できるため。Lv0-Lv2 を使うなら
+1 エポックに 4 本以上まとめる必要がある。
+
+### どれを選ぶか
+
+| | 書く量 | 選ぶ場面 |
+|---|---|---|
+| **A. HAL なし** | 3 行 | 既に自分でパースしている。**まずこれで試す** |
+| **B. JSON Lines** | ファームに printf 1 つ | ファームを触れる。Python を書きたくない |
+| **C. HAL クラス** | 20 行 | 再接続処理など、ストリームを自分で握りたい |
+| (`TextHal`) | 正規表現 1 本 | ファームを触れず、出力形式も変えられない |
+
+**測位側のコードはどれでも同じ。** 違うのは観測の入り口だけ。
+
+---
+
 ## モジュール別の目安
 
 実機の出力形式はファームウェアのバージョンで変わるので、
@@ -158,16 +288,6 @@ for a in anchors:
 
 **下に行くほど手前の作業が増える。** DWM1001 なら今日つながるが、
 DW3000 を素から立ち上げるなら、このライブラリに届くまでに数週間かかる。
-
----
-
-## つなぎ方の選択
-
-| 方法 | 手間 | 向いている場面 |
-|---|---|---|
-| **`TextHal`** | 正規表現 1 本 | 既存ファームが何か吐いている。**まずこれを試す** |
-| **`JsonLinesHal`** | ファームを少し改造 | 自分でファームを書ける。時刻・品質値を正確に載せられる |
-| **`UwbHal` を継承** | Python を 30 行 | SPI で直接叩く、独自プロトコル |
 
 `TextHal` で始めて、精度を詰める段になったら `JsonLinesHal` に移るのが
 現実的な順序。品質値 (`q`) を載せられるようになると NLOS に強くなる。

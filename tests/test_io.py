@@ -125,3 +125,67 @@ def test_fix_to_dict_is_json_safe():
     fix = ul.Fix.failed(t=1.0, n_total=3, level="Lv2")
     s = json.dumps(fix.to_dict())
     assert "NaN" not in s  # NaN は JSON として無効なので None に落とすこと
+
+
+# ------------------------------------------------------- ドキュメントの最小形
+
+def test_three_minimal_integrations_agree():
+    """docs/BRINGUP.md に載せた 3 通りが同じ結果になること.
+
+    「ID と距離が取れていれば、あとはこれだけ」という主張を固定する。
+    """
+    anchors = [ul.Anchor("A0", [0.2, 0.2, 2.4]), ul.Anchor("A1", [7.8, 0.2, 2.4]),
+               ul.Anchor("A2", [7.8, 5.8, 0.3]), ul.Anchor("A3", [0.2, 5.8, 0.3]),
+               ul.Anchor("A4", [0.2, 3.0, 0.3])]
+    truth = np.array([3.0, 2.0, 1.2])
+    readings = [(a.id, float(np.linalg.norm(truth - a.position))) for a in anchors]
+
+    # A. HAL なし — Measurement を並べて update するだけ
+    est = ul.make_estimator("Lv2", anchors)
+    batch = ul.MeasurementBatch(
+        t=0.0, measurements=[ul.Measurement(aid, d) for aid, d in readings])
+    fix_a = est.update(batch)
+
+    # B. JSON Lines — ファームが 1 行吐く形
+    meas = ",".join(f'{{"a":"{aid}","d":{d:.6f}}}' for aid, d in readings)
+    line = f'{{"t":0.0,"meas":[{meas}]}}\n'
+    hal = ul.JsonLinesHal(io.StringIO(line), anchors=anchors)
+    fix_b = ul.run_offline(_collect(hal), anchors, level="Lv2")[0]
+
+    # C. HAL クラス — anchors と poll だけ実装
+    class MyHal(ul.UwbHal):
+        def __init__(self):
+            self._done = False
+
+        @property
+        def anchors(self):
+            return anchors
+
+        @property
+        def is_open(self):
+            return not self._done
+
+        def poll(self, timeout=0.0):
+            self._done = True
+            return [ul.MeasurementBatch(
+                t=0.0, measurements=[ul.Measurement(aid, d) for aid, d in readings])]
+
+    fix_c = list(ul.Pipeline(MyHal(), level="Lv2").run())[0]
+
+    for fix in (fix_a, fix_b, fix_c):
+        assert fix.ok
+        assert np.linalg.norm(fix.position - truth) < 0.02
+    assert np.allclose(fix_a.position, fix_b.position, atol=1e-4)
+    assert np.allclose(fix_a.position, fix_c.position, atol=1e-4)
+
+
+def _collect(hal, timeout=1.0):
+    hal.open()
+    out, t0 = [], time.monotonic()
+    while time.monotonic() - t0 < timeout:
+        out.extend(hal.poll(0.05))
+        if not hal.is_open:
+            break
+    out.extend(hal.poll(0.05))
+    hal.close()
+    return out

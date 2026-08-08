@@ -104,19 +104,35 @@ for fix in ul.Pipeline(hal, level="Lv2").run():
         print(f"{fix.position.round(2)}  ±{fix.sigma:.2f} m  ({fix.n_used}/{fix.n_total} 本)")
 ```
 
-つなぎ方は 3 通りある。どれでも測位側のコードは変わらない。
+### 既に自分でパースしているなら HAL は要らない
 
-| 方法 | 手間 | 向いている場面 |
+ID と距離が手元にあるなら、**3 行**で位置が出る。
+
+```python
+est = ul.make_estimator("Lv2", anchors)
+
+readings = my_uart_read()        # [("A0", 3.214), ("A1", 2.887), ...]  距離は m
+batch = ul.MeasurementBatch(t=time.monotonic(),
+                            measurements=[ul.Measurement(a, d) for a, d in readings])
+fix = est.update(batch)          # → fix.position, fix.sigma, fix.gdop
+```
+
+つなぎ方は 4 通り。**どれでも測位側のコードは変わらない。**
+
+| 方法 | 書く量 | 向いている場面 |
 |---|---|---|
-| **`TextHal`** | 正規表現 1 本 | 既存ファームが何か吐いている。**まずこれ** |
-| **`JsonLinesHal`** | ファームを少し改造 | 自分でファームを書ける。時刻・品質値を正確に載せられる |
-| **`UwbHal` を継承** | Python を 30 行 | SPI で直接叩く、独自プロトコル |
+| **HAL なし** | 3 行 | 既に自分でパースしている。**まずこれ** |
+| **`TextHal`** | 正規表現 1 本 | ファームを触れず、出力形式も変えられない |
+| **`JsonLinesHal`** | ファームに `printf` 1 つ | ファームを書ける。時刻・品質値を正確に載せられる |
+| **`UwbHal` を継承** | 20 行 | 再接続など、ストリームを自分で握りたい |
+
+JSON Lines はこの 1 行を吐くだけ (`a` と `d` が必須、他は任意):
 
 ```json
-{"v":1,"type":"meas","t":12.345,"tag":"tag0","meas":[
-  {"a":"A0","d":3.214,"q":0.93},
-  {"a":"A1","d":2.887,"q":0.41}]}
+{"t":12.345,"meas":[{"a":"A0","d":3.214,"q":0.93},{"a":"A1","d":2.887}]}
 ```
+
+→ 3 通りの動く最小形は [`examples/03_minimal_integration.py`](examples/03_minimal_integration.py)
 
 ### 渡す情報は 3 つだけ
 
@@ -229,6 +245,7 @@ python -m uwb_loc ui --port 8765
 ```bash
 python examples/01_quickstart.py      # ハードなしで Lv0-Lv3 を比較
 python examples/02_custom_hal.py      # 自前の UWB 用 HAL を書く
+python examples/03_minimal_integration.py   # つなぎ方 3 通りの最小形
 ```
 
 ## SNS カード
