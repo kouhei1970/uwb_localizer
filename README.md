@@ -169,6 +169,23 @@ python examples/01_quickstart.py      # ハードなしで Lv0-Lv3 を比較
 python examples/02_custom_hal.py      # 自前の UWB 用 HAL を書く
 ```
 
+## SNS カード
+
+![OG card](docs/social/og-card.png)
+
+`docs/social/og-card.png` (1280x640)。GitHub の Settings → General →
+Social preview に登録すると、リポジトリを共有したときにこの画像が出る。
+
+図は**実際にライブラリを走らせた出力**で、飾りではない。細い円弧は
+ある 1 エポックで得られた測距値 (高さの差を抜いた水平距離) で、
+綺麗に 1 点で交わらないのが本題。その食い違いを詰めた結果が紫の軌跡。
+数字も同じ実行から取っているので、宣伝と中身がずれない。
+
+```bash
+pip install playwright                 # ブラウザ本体は同梱のものを使う
+python docs/social/build_card.py
+```
+
 ## 開発
 
 ```bash
