@@ -50,12 +50,16 @@
   argparse の `help` の方
 - **コード例は動く形で書く。** 省略を `...` で書かない —— dict の中では
   SyntaxError になる。省略はコメントで示す
-- **数式は GitHub で表示できる書き方に限る。** 引っかかるのは 2 つ:
+- **数式は GitHub で表示できる書き方に限る。** 引っかかるのは 3 つ:
   - 表示数式は `$$` を独立した行に置く (1 行形式だと行列の `\\` が潰れる)
   - `\operatorname` は使えない (`\mathrm` を使う)。GitHub の KaTeX が
     マクロを定義できる系のコマンドを禁止しているため
+  - **開き `$` の直前に半角空白を入れる。** 「。$x$」のように日本語の直後だと
+    GitHub は数式と認識しない (実際の出力で確認済み: 直前が非 ASCII の 26 個が
+    全滅、半角空白なら 101 個中 101 個が描画)
   ```bash
-  npm install katex && node tools/check_math.js docs/*.md   # 実際に描画して確かめる
+  npm install katex && node tools/check_math.js docs/*.md   # 手元で描画して確かめる
+  python tools/check_github_math.py docs/UWB_ALGORITHMS.md  # push 後、実物を確かめる
   ```
 - 数字を書くときは**測ってから**。`tests/test_docs.py` がサンプルの実行と
   リンク切れとコード例の構文と数式の書き方を見ている

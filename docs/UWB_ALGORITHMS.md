@@ -15,7 +15,7 @@
 | $z_i$ | 観測値 |
 | $e_i = z_i - h_i(p)$ | 残差 |
 | $u_i = (p - a_i)/d_i$ | アンカー $i$ からタグへの単位ベクトル |
-| $\sigma_i$ | 観測 $i$ の標準偏差、$w_i = 1/\sigma_i^2$ |
+| $\sigma_i$ | 観測 $i$ の標準偏差、 $w_i = 1/\sigma_i^2$ |
 
 ---
 
@@ -53,7 +53,7 @@ $$
 
 ### 方位角・仰角 (AoA/PDoA)
 
-$\Delta = p - a_i$、$\rho = \sqrt{\Delta_x^2+\Delta_y^2}$、$r^2 = \rho^2 + \Delta_z^2$ として
+$\Delta = p - a_i$、 $\rho = \sqrt{\Delta_x^2+\Delta_y^2}$、 $r^2 = \rho^2 + \Delta_z^2$ として
 
 $$
 h = \mathrm{atan2}(\Delta_y, \Delta_x), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_y}{\rho^2},\ \frac{\Delta_x}{\rho^2},\ 0\right)
@@ -82,7 +82,7 @@ $$
 \sigma_\text{eff} = \sigma \cdot \bigl(1 + 3(1-q)\bigr)
 $$
 
-で反映する。$q=1$ で等倍、$q=0$ で 4 倍 → 重みは 1/16 に落ちる。
+で反映する。 $q=1$ で等倍、 $q=0$ で 4 倍 → 重みは 1/16 に落ちる。
 **観測を捨てるのではなく重みを下げる**のは、アンカー本数が少ないときに
 「捨てすぎて解けない」を避けるため。
 
@@ -111,10 +111,10 @@ $p$ について線形なので擬似逆行列 1 発。反復も初期値も要�
 
 3 つの問題がある。
 
-1. **二乗による偏り**。$r_i = d_i + n_i$ なので $r_i^2 = d_i^2 + 2d_i n_i + n_i^2$。
+1. **二乗による偏り**。 $r_i = d_i + n_i$ なので $r_i^2 = d_i^2 + 2d_i n_i + n_i^2$。
    最後の項の期待値 $\sigma^2$ は差分をとっても消えず、系統誤差として残る。
 2. **重みが正しくない**。雑音項が $2d_i n_i$ の形で入るので、実効的な分散が
-   $4d_i^2\sigma_i^2$ になる。遠いアンカーほど不利で、$1/\sigma_i^2$ の重みは最適でない。
+   $4d_i^2\sigma_i^2$ になる。遠いアンカーほど不利で、 $1/\sigma_i^2$ の重みは最適でない。
 3. **行が相関する**。全行が基準アンカーの $r_j, n_j$ を共有するので、
    最小二乗の前提 (独立誤差) が崩れる。基準の選び方で答えが変わるのもこのため。
 
@@ -140,14 +140,14 @@ $$
 \underbrace{\begin{bmatrix} -2a_i^\top & 1\end{bmatrix}}_{A \text{ の第 } i \text{ 行}} y = \underbrace{r_i^2 - \lVert a_i\rVert^2}_{b_i} \qquad \Longrightarrow \qquad Ay = b
 $$
 
-もちろん $y$ は自由ではなく、$g = \lVert p\rVert^2$ という拘束が 1 本つく。これは
+もちろん $y$ は自由ではなく、 $g = \lVert p\rVert^2$ という拘束が 1 本つく。これは
 2 次形式で書ける。
 
 $$
 y^\top D y + 2f^\top y = 0, \qquad D = \begin{bmatrix} I_d & 0 \\ 0 & 0\end{bmatrix},\quad f = \begin{bmatrix} 0 \\ -1/2\end{bmatrix}
 $$
 
-（検算: $y^\top D y = \lVert p\rVert^2$、$2f^\top y = -g$、和が 0。）
+（検算: $y^\top D y = \lVert p\rVert^2$、 $2f^\top y = -g$、和が 0。）
 
 つまり解くべきは
 
@@ -181,7 +181,7 @@ $$
 
 ### なぜ二分法で必ず解けるのか
 
-$G = A^\top W A$ とする。$G + \lambda D \succ 0$ が成り立つ範囲を調べる。
+$G = A^\top W A$ とする。 $G + \lambda D \succ 0$ が成り立つ範囲を調べる。
 一般化固有値 $Dv = \gamma\,Gv$ に対し
 
 $$
@@ -242,7 +242,7 @@ $$
 \boxed{\ (J^\top W J)\,\Delta = J^\top W e, \qquad p \leftarrow p + \Delta\ }
 $$
 
-$J$ の行は §1 のヤコビアン、$W = \mathrm{diag}(w_i)$。
+$J$ の行は §1 のヤコビアン、 $W = \mathrm{diag}(w_i)$。
 
 ### Levenberg-Marquardt 減衰
 
@@ -259,7 +259,7 @@ $$
 $$
 
 コストが下がったら $\lambda \leftarrow 0.3\lambda$、上がったら $\lambda \leftarrow 4\lambda$ で
-更新を破棄。$\lambda$ が大きいときは最急降下法に、小さいときは Gauss-Newton に
+更新を破棄。 $\lambda$ が大きいときは最急降下法に、小さいときは Gauss-Newton に
 近づく。**解が退化していても止まる**ことが保証される。
 
 ### 共分散
@@ -299,7 +299,7 @@ $z$ は既知として固定するので、共分散も 2×2 部分だけが埋�
 
 ### 5.2 M 推定 (Huber) と IRLS
 
-二乗損失の代わりにフーバー損失を使う。$u = e/\sigma$ として
+二乗損失の代わりにフーバー損失を使う。 $u = e/\sigma$ として
 
 $$
 \rho(u) = \begin{cases} \tfrac{1}{2}u^2 & |u| \le k \\ k|u| - \tfrac{1}{2}k^2 & |u| > k\end{cases}
@@ -321,13 +321,13 @@ Reweighted Least Squares)。実装では反復のたびに $w_i \leftarrow \math
 
 $k = 1.345$ は、純ガウス誤差に対して効率 95% を保つ標準的な値。
 
-Tukey の biweight ($\mathcal{W} = (1-(u/k)^2)^2$、$|u|>k$ で 0) も用意してあるが
-既定にしていない。$\psi$ が再下降するので、初期値が悪いと正しい観測まで
+Tukey の biweight ($\mathcal{W} = (1-(u/k)^2)^2$、 $|u|>k$ で 0) も用意してあるが
+既定にしていない。 $\psi$ が再下降するので、初期値が悪いと正しい観測まで
 完全に切って別の解に落ち着く。実測でも Huber より悪かった (§8)。
 
 ### 5.3 片側損失 — NLOS の物理を重みに入れる
 
-NLOS は距離を**伸ばす側にしか出ない**。$e = z - h$ の符号なら $e > 0$ 側。
+NLOS は距離を**伸ばす側にしか出ない**。 $e = z - h$ の符号なら $e > 0$ 側。
 そこでしきい値を符号で変える。
 
 $$
@@ -345,7 +345,7 @@ $|u_i| > 4$ は $6\times10^{-5}$ の事象なので、外れ値とみなして�
 
 ### 5.5 RANSAC — 常時ではなく保険として
 
-最小構成 ($d+1$ 本) から仮解を作り、$4\sigma$ 以内に収まる観測が最多の組を採る。
+最小構成 ($d+1$ 本) から仮解を作り、 $4\sigma$ 以内に収まる観測が最多の組を採る。
 
 **ここが実装で最も試行錯誤した箇所。** 提案どおり常時走らせたら Lv1 より
 悪化した (RMSE 0.297 → 0.401 m)。理由は明快で、3 次元の最小構成は 4 本、
@@ -410,12 +410,12 @@ Q_1^{\text{CV}} = \sigma_a^2\begin{bmatrix} \Delta t^3/3 & \Delta t^2/2 \\ \Delt
 Q_1^{\text{CA}} = \sigma_j^2\begin{bmatrix} \Delta t^5/20 & \Delta t^4/8 & \Delta t^3/6 \\ \Delta t^4/8 & \Delta t^3/3 & \Delta t^2/2 \\ \Delta t^3/6 & \Delta t^2/2 & \Delta t\end{bmatrix}
 $$
 
-離散版 (1 ステップ中は加速度一定と見なす $\Gamma\Gamma^\top$ 形、$\Delta t^4/4$ が出るもの) と
+離散版 (1 ステップ中は加速度一定と見なす $\Gamma\Gamma^\top$ 形、 $\Delta t^4/4$ が出るもの) と
 **混ぜないこと**。`sigma_a` の意味がモードによって変わってしまう。
 
 ### 6.3 更新 — 1 本ずつスカラーで
 
-観測は位置にしか依存しないので $H = [\partial h/\partial p,\ 0,\ \ldots]$ (1×$n_x$)。
+観測は位置にしか依存しないので $H = [\partial h/\partial p,\ 0,\ \ldots]$ (1× $n_x$)。
 
 $$
 \nu = z - h(\hat{x}), \qquad S = HPH^\top + \sigma^2 \quad (\text{スカラー})
@@ -443,7 +443,7 @@ $$
 ### 6.4 イノベーションゲートと「棺桶化」対策
 
 $|\nu| > \gamma\sqrt{S}$ ($\gamma$ は既定 3) の観測はそのエポックで使わない。
-これが NLOS 対策の本体で、$S$ が「予測の不確かさ + 観測の不確かさ」を
+これが NLOS 対策の本体で、 $S$ が「予測の不確かさ + 観測の不確かさ」を
 正しく含むので、**フィルタが自信を持っているときほど厳しく**判定される。
 
 ただしこれには既知の失敗モードがある。何かの拍子に状態が間違うと、
@@ -465,7 +465,7 @@ $|\nu| > \gamma\sqrt{S}$ ($\gamma$ は既定 3) の観測はそのエポック�
 実装: `uwb_loc/solvers/closed_form.py:chan_tdoa`
 
 基準アンカーまでの距離 $d_\text{ref}$ を**補助未知数に加える**と線形になる、
-という GPS 由来の手当て。$r_i = d_i - d_\text{ref}$ (観測) として
+という GPS 由来の手当て。 $r_i = d_i - d_\text{ref}$ (観測) として
 
 $$
 d_i = d_\text{ref} + r_i \ \Longrightarrow\ \lVert p\rVert^2 - 2a_i^\top p + K_i = d_\text{ref}^2 + 2d_\text{ref}r_i + r_i^2
@@ -478,7 +478,7 @@ $$
 \boxed{\ 2(a_i - a_\text{ref})^\top p + 2r_i\,d_\text{ref} = K_i - K_\text{ref} - r_i^2\ }
 $$
 
-未知数 $[p;\,d_\text{ref}]$ について線形。$n-1 \ge d+1$ 本あれば WLS で解ける。
+未知数 $[p;\,d_\text{ref}]$ について線形。 $n-1 \ge d+1$ 本あれば WLS で解ける。
 
 2 段目 ($d_\text{ref} = \lVert p - a_\text{ref}\rVert$ の拘束を使った補正) は入れていない。
 初期値として使う分には 1 段目で十分で、最終精度は後段の WNLS が担保するため。
@@ -591,7 +591,7 @@ B = -\tfrac{1}{2}\,J D^{\circ 2} J, \qquad J = I - \tfrac{1}{n}\mathbf{1}\mathbf
 $$
 
 は、中心化した座標 $X$ のグラム行列 $XX^\top$ に一致する。
-（$D^2_{ij} = \lVert x_i\rVert^2 + \lVert x_j\rVert^2 - 2x_i^\top x_j$ の
+（ $D^2_{ij} = \lVert x_i\rVert^2 + \lVert x_j\rVert^2 - 2x_i^\top x_j$ の
 行・列方向の項が二重中心化で消えるため。）
 
 固有分解 $B = U\Lambda U^\top$ の上位 $d$ 個を取って $X = U_d\Lambda_d^{1/2}$。
@@ -611,7 +611,7 @@ $$
 \min_X \sum_{(i,j)\in\text{既知}} w_{ij}\bigl(\lVert x_i - x_j\rVert - d_{ij}\bigr)^2
 $$
 
-ペア $(i,j)$ のヤコビアンは $\partial/\partial x_i = u_{ij}$、$\partial/\partial x_j = -u_{ij}$。
+ペア $(i,j)$ のヤコビアンは $\partial/\partial x_i = u_{ij}$、 $\partial/\partial x_j = -u_{ij}$。
 座標系の自由度 (3 次元で並進 3 + 回転 3 = 6) の分だけ $H$ は必ず特異になるが、
 LM 減衰がそれを吸収する。
 
@@ -651,7 +651,7 @@ $$
 実装: `uwb_loc/calibration.py:estimate_antenna_delays`
 
 測距値は $r = d + \delta_\text{anchor} + \delta_\text{tag}$ と書ける。既知距離での測定を
-集めれば線形最小二乗で分離できる…が、$\delta_\text{anchor}$ と $\delta_\text{tag}$ には
+集めれば線形最小二乗で分離できる…が、 $\delta_\text{anchor}$ と $\delta_\text{tag}$ には
 **定数分の不定性がある** (全アンカーの遅延を $+c$、タグを $-c$ しても同じ)。
 
 そこで**アンカー遅延の平均を 0 に固定**する拘束を 1 行足して解く。
@@ -664,7 +664,7 @@ $d_\text{true} \approx \alpha\,r_\text{meas} + \beta$ は `fit_range_bias` で�
 
 ## 11. 実測での比較
 
-同一の観測列 (8 台立体配置、$\sigma_0 = 8$ cm、10 Hz、8 の字軌道、5 seed 平均)。
+同一の観測列 (8 台立体配置、 $\sigma_0 = 8$ cm、10 Hz、8 の字軌道、5 seed 平均)。
 
 | NLOS 率 | Lv0 | Lv1 | Lv2 | Lv3 |
 |---|---|---|---|---|

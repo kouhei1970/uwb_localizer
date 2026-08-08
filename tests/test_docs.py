@@ -184,6 +184,48 @@ def test_no_macros_that_github_rejects():
                      + "\n  ".join(bad))
 
 
+def test_inline_math_is_preceded_by_ascii_space():
+    """開き ``$`` の直前が非 ASCII だと GitHub は数式として認識しない.
+
+    GitHub の実際の出力で確かめた規則。描画される数式だけが
+    ``<math-renderer>`` に包まれるので、包まれているかを数えると分かる。
+
+        直前の文字      描画された   未描画
+        ASCII 空白           101        5
+        行頭                  19        1
+        非 ASCII               0       26     ← 全滅
+
+    「。$x$」のように日本語の直後に置くと出ない。半角空白を 1 つ挟めばよい。
+    実物の確認は ``python tools/check_github_math.py docs/UWB_ALGORITHMS.md``。
+    """
+    import re
+
+    inline = re.compile(r"(?<!\$)\$([^$\n]+?)\$(?!\$)")
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        in_code = in_block = False
+        for i, line in enumerate(md.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            if line.strip() == "$$":
+                in_block = not in_block
+                continue
+            if in_block or "$" not in line:
+                continue
+            for m in inline.finditer(line):
+                prev = line[m.start() - 1] if m.start() > 0 else None
+                if prev is not None and ord(prev) >= 128:
+                    bad.append(f"{md.relative_to(ROOT)}:{i} 直前が「{prev}」 — "
+                               f"{m.group(0)[:40]}")
+    assert not bad, ("GitHub が描画しない数式 (開き $ の前に半角空白を入れる):\n  "
+                     + "\n  ".join(bad))
+
+
 def test_inline_math_delimiters_are_balanced():
     """インライン数式の $ が閉じているか (奇数個だと以降が数式扱いになる)."""
     bad = []
