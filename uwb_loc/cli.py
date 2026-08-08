@@ -191,13 +191,68 @@ def cmd_gdop(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- survey
 
 
-def cmd_survey(args: argparse.Namespace) -> int:
-    rows = [r for r in Path(args.matrix).read_text(encoding="utf-8").splitlines() if r.strip()]
+def _is_number(cell: str) -> bool:
+    """空欄 (欠測) も数値扱いにする. ラベルかどうかの判定に使う."""
+    if not cell:
+        return True
+    try:
+        float(cell)
+    except ValueError:
+        return False
+    return True
+
+
+def read_distance_matrix(path: str | Path) -> tuple[np.ndarray, list[str] | None]:
+    """相互測距の CSV を読む.
+
+    表計算からそのまま出したものを想定して、**ヘッダ行と ID 列があっても
+    無くても読める**。空欄は欠測 (NaN) として扱う。
+
+        ,       A0,    A1,    A2        ← ヘッダ行 (任意)
+        A0,     0,     4.12,  6.03      ← ID 列 (任意)
+        A1,     4.12,  0,     4.55
+        A2,     6.03,  4.55,  0
+    """
+    rows = [r for r in Path(path).read_text(encoding="utf-8").splitlines() if r.strip()]
+    if not rows:
+        raise ValueError("CSV が空です")
+    cells = [[c.strip() for c in r.split(",")] for r in rows]
+
     ids: list[str] | None = None
-    if rows and not rows[0].split(",")[0].strip().lstrip("-").replace(".", "").isdigit():
-        ids = [c.strip() for c in rows[0].split(",")]
-        rows = rows[1:]
-    dmat = np.array([[float(c) if c.strip() else np.nan for c in r.split(",")] for r in rows])
+    # ヘッダ行なら先頭以外が全部ラベル。ID 列つきのデータ行 (A0,0,4.12) は
+    # 先頭だけがラベルで残りは数値なので、ここで取り違えない。
+    if len(cells[0]) > 1 and all(not _is_number(c) for c in cells[0][1:]):
+        ids = [c for c in cells[0] if c]                # 隅の空セルは捨てる
+        cells = cells[1:]
+    if cells and all(row and not _is_number(row[0]) for row in cells):   # 先頭列は ID
+        row_ids = [row[0] for row in cells]
+        cells = [row[1:] for row in cells]
+        if ids is None:
+            ids = row_ids
+
+    n = len(cells)
+    for i, row in enumerate(cells):
+        if len(row) != n:
+            raise ValueError(
+                f"{i + 1} 行目の列数 {len(row)} が行数 {n} と一致しません。"
+                "相互測距行列は正方 (N×N) で渡してください")
+    if ids is not None and len(ids) != n:
+        raise ValueError(f"ID の数 {len(ids)} が行数 {n} と一致しません")
+
+    return np.array([[float(c) if c else np.nan for c in row] for row in cells]), ids
+
+
+def cmd_survey(args: argparse.Namespace) -> int:
+    try:
+        dmat, ids = read_distance_matrix(args.matrix)
+    except ValueError as e:
+        print(f"CSV を読めませんでした: {e}\n", file=sys.stderr)
+        print("期待する形 (ヘッダ行と ID 列は省略可、空欄は欠測):", file=sys.stderr)
+        print("        ,A0  ,A1  ,A2", file=sys.stderr)
+        print("      A0,0   ,4.12,6.03", file=sys.stderr)
+        print("      A1,4.12,0   ,4.55", file=sys.stderr)
+        print("      A2,6.03,4.55,0", file=sys.stderr)
+        return 2
     anchors = self_survey(dmat, ids, dim=args.dim)
     print(json.dumps({"anchors": [a.to_dict() for a in anchors]}, ensure_ascii=False, indent=2))
     return 0

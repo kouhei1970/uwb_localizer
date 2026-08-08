@@ -189,3 +189,65 @@ def _collect(hal, timeout=1.0):
     out.extend(hal.poll(0.05))
     hal.close()
     return out
+
+
+# ------------------------------------------------------------ 相互測距 CSV
+
+
+def _write(tmp_path, name, text):
+    p = tmp_path / name
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def test_distance_matrix_reads_header_and_id_column(tmp_path):
+    """表計算からそのまま出した形 (隅が空、ヘッダ行、ID 列) を読める."""
+    from uwb_loc.cli import read_distance_matrix
+
+    p = _write(tmp_path, "d.csv",
+               ",A0,A1,A2\n"
+               "A0,0,4.12,6.03\n"
+               "A1,4.12,0,4.55\n"
+               "A2,6.03,4.55,0\n")
+    d, ids = read_distance_matrix(p)
+    assert ids == ["A0", "A1", "A2"]
+    assert d.shape == (3, 3)
+    assert d[0, 1] == pytest.approx(4.12)
+
+
+def test_distance_matrix_reads_bare_numbers(tmp_path):
+    """ID が無くても読める (この場合 ids は None)."""
+    from uwb_loc.cli import read_distance_matrix
+
+    p = _write(tmp_path, "d.csv", "0,4.12\n4.12,0\n")
+    d, ids = read_distance_matrix(p)
+    assert ids is None
+    assert d.shape == (2, 2)
+
+
+def test_distance_matrix_reads_id_column_without_header(tmp_path):
+    from uwb_loc.cli import read_distance_matrix
+
+    p = _write(tmp_path, "d.csv", "A0,0,4.12\nA1,4.12,0\n")
+    d, ids = read_distance_matrix(p)
+    assert ids == ["A0", "A1"]
+    assert d[1, 0] == pytest.approx(4.12)
+
+
+def test_distance_matrix_treats_blanks_as_missing(tmp_path):
+    """届かなかったペアは空欄。NaN として self_survey に渡す."""
+    from uwb_loc.cli import read_distance_matrix
+
+    p = _write(tmp_path, "d.csv",
+               ",A0,A1,A2\nA0,0,4.12,\nA1,4.12,0,4.55\nA2,,4.55,0\n")
+    d, _ = read_distance_matrix(p)
+    assert np.isnan(d[0, 2]) and np.isnan(d[2, 0])
+
+
+def test_distance_matrix_rejects_a_non_square_matrix(tmp_path):
+    """列数がずれていたら、黙って壊れずにその場で言う."""
+    from uwb_loc.cli import read_distance_matrix
+
+    p = _write(tmp_path, "d.csv", "0,4.12,6.03\n4.12,0,4.55\n")
+    with pytest.raises(ValueError, match="正方"):
+        read_distance_matrix(p)
