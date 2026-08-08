@@ -117,6 +117,7 @@ class Pipeline:
         return np.array([f.position for f in self.fixes])
 
     def times(self) -> np.ndarray:
+        """これまでに測位した時刻の一覧 [s]."""
         return np.array([f.t for f in self.fixes])
 
 

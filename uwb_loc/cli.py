@@ -420,95 +420,125 @@ def cmd_ui(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- main
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """コマンドラインの定義。
+
+    ``main`` から切り出してあるのは、``docs/build_reference.py`` が
+    ここを読んでリファレンスを生成するため。定義はここ 1 箇所にある。
+    """
     p = argparse.ArgumentParser(prog="uwb-loc", description="UWB 測位ライブラリ")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp: argparse.ArgumentParser) -> None:
-        sp.add_argument("--anchors", help="アンカー座標の JSON")
+        sp.add_argument("--anchors", help="アンカー座標の JSON。省略すると --room から自動生成")
         sp.add_argument("--room", nargs=3, type=float, default=[8.0, 6.0, 2.6],
-                        metavar=("X", "Y", "Z"))
-        sp.add_argument("--n-low", type=int, default=4, help="下段アンカーの数 (0 で天井のみ)")
-        sp.add_argument("--dim", type=int, default=3, choices=(2, 3))
+                        metavar=("X", "Y", "Z"), help="部屋の大きさ [m]")
+        sp.add_argument("--n-low", type=int, default=4,
+                        help="下段アンカーの数 (0 で天井のみ = 同一平面になる)")
+        sp.add_argument("--dim", type=int, default=3, choices=(2, 3),
+                        help="2 なら高さを --height に固定して解く")
         sp.add_argument("--height", type=float, default=1.2, help="タグ高さ / 2D の固定高さ [m]")
 
-    sp = sub.add_parser("sim", help="シミュレーションして精度を出す")
+    sp = sub.add_parser("sim", help="シミュレーションして精度を出す",
+                        description="実機なしで観測を作り、測位レベルごとの精度を出す。")
     common(sp)
-    sp.add_argument("--levels", default="Lv0,Lv1,Lv2,Lv3")
-    sp.add_argument("--duration", type=float, default=40.0)
-    sp.add_argument("--rate", type=float, default=10.0)
-    sp.add_argument("--seed", type=int, default=0)
+    sp.add_argument("--levels", default="Lv0,Lv1,Lv2,Lv3",
+                    help="比較する測位レベルをカンマ区切りで")
+    sp.add_argument("--duration", type=float, default=40.0, help="測る長さ [s]")
+    sp.add_argument("--rate", type=float, default=10.0, help="観測レート [Hz]")
+    sp.add_argument("--seed", type=int, default=0, help="乱数の種。変えると誤差の出方が変わる")
     sp.add_argument("--traj", default="figure8",
-                    choices=("figure8", "circle", "static", "random_walk"))
-    sp.add_argument("--size", type=float, default=2.0)
-    sp.add_argument("--period", type=float, default=24.0)
-    sp.add_argument("--sigma0", type=float, default=0.08)
-    sp.add_argument("--nlos", type=float, default=0.15, help="NLOS 確率")
-    sp.add_argument("--nlos-bias", type=float, default=0.8)
-    sp.add_argument("--loss", type=float, default=0.03)
-    sp.add_argument("--log", help="観測を JSON Lines で書き出す")
+                    choices=("figure8", "circle", "static", "random_walk"),
+                    help="タグの動き方")
+    sp.add_argument("--size", type=float, default=2.0, help="軌道の大きさ [m]")
+    sp.add_argument("--period", type=float, default=24.0, help="軌道を 1 周する時間 [s]")
+    sp.add_argument("--sigma0", type=float, default=0.08, help="測距ノイズの標準偏差 [m]")
+    sp.add_argument("--nlos", type=float, default=0.15,
+                    help="NLOS (見通しが切れて距離が伸びる) 確率")
+    sp.add_argument("--nlos-bias", type=float, default=0.8, help="NLOS のとき伸びる量の平均 [m]")
+    sp.add_argument("--loss", type=float, default=0.03, help="測距が欠測する確率")
+    sp.add_argument("--log", help="観測を JSON Lines で書き出す (replay で読み直せる)")
     sp.set_defaults(func=cmd_sim)
 
-    sp = sub.add_parser("replay", help="記録した JSON Lines を測位し直す")
+    sp = sub.add_parser("replay", help="記録した JSON Lines を測位し直す",
+                        description="記録したログを別の測位レベルで解き直す。"
+                                    "現場で録っておけば、あとで何度でも試せる。")
     common(sp)
-    sp.add_argument("path")
-    sp.add_argument("--level", default="Lv2")
+    sp.add_argument("path", help="読むログ (sim --log か JsonLinesWriter が書いたもの)")
+    sp.add_argument("--level", default="Lv2", help="測位レベル (Lv0/Lv1/Lv2/Lv3)")
     sp.add_argument("--format", default="jsonl", choices=("jsonl", "text"),
-                    help="ログの形式 (既定 jsonl)")
+                    help="ログの形式")
     sp.add_argument("--pattern", help="text のときの正規表現 (省略時は汎用パターン)")
-    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"))
+    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"),
+                    help="text のときの距離の単位")
     sp.add_argument("--prefix", default="", help="アンカー ID の接頭辞 (例 A)")
     sp.add_argument("--rate", type=float, default=10.0,
-                    help="text のとき時刻を合成するレート [Hz]")
+                    help="text のとき時刻を合成するレート [Hz]。Lv3 に要る")
     sp.add_argument("--out", help="結果を CSV で書き出す")
     sp.set_defaults(func=cmd_replay)
 
-    sp = sub.add_parser("gdop", help="アンカー配置の GDOP を評価する")
+    sp = sub.add_parser("gdop", help="アンカー配置の GDOP を評価する",
+                        description="置く前に配置の良し悪しを見る。"
+                                    "GDOP が大きい場所は、測距が同じ精度でも位置が暴れる。")
     common(sp)
-    sp.add_argument("--nx", type=int, default=60)
-    sp.add_argument("--ny", type=int, default=40)
+    sp.add_argument("--nx", type=int, default=60, help="ヒートマップの横の分割数")
+    sp.add_argument("--ny", type=int, default=40, help="ヒートマップの縦の分割数")
     sp.set_defaults(func=cmd_gdop)
 
-    sp = sub.add_parser("survey", help="相互測距行列 (CSV) からアンカー配置を推定する")
-    sp.add_argument("matrix")
-    sp.add_argument("--dim", type=int, default=3, choices=(2, 3))
+    sp = sub.add_parser("survey", help="相互測距行列 (CSV) からアンカー配置を推定する",
+                        description="アンカー同士で測った距離の表から座標を復元する。"
+                                    "巻き尺で全台測らずに済む。")
+    sp.add_argument("matrix", help="N×N の距離 [m] の CSV。ヘッダ行と ID 列は省略可、空欄は欠測")
+    sp.add_argument("--dim", type=int, default=3, choices=(2, 3),
+                    help="3 なら最低 4 台、2 なら最低 3 台の相互測距が要る")
     sp.set_defaults(func=cmd_survey)
 
-    sp = sub.add_parser("sniff", help="実機の出力を覗いて測距として読めるか確かめる")
+    sp = sub.add_parser("sniff", help="実機の出力を覗いて測距として読めるか確かめる",
+                        description="実機立ち上げの最初にやること。"
+                                    "ここで単位とアンカー ID を確定させておく。")
     sp.add_argument("--serial", help="シリアルポート (例 /dev/ttyUSB0)")
-    sp.add_argument("--baud", type=int, default=115200)
-    sp.add_argument("--tcp", help="host:port")
-    sp.add_argument("--file", help="保存したログ")
+    sp.add_argument("--baud", type=int, default=115200, help="シリアルのボーレート")
+    sp.add_argument("--tcp", help="TCP で読む場合の host:port")
+    sp.add_argument("--file", help="保存したログを読む")
     sp.add_argument("--pattern", help="正規表現 (省略すると推測する)")
-    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"))
+    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"), help="距離の単位")
     sp.add_argument("--prefix", default="", help="アンカー ID の接頭辞 (例 A)")
     sp.add_argument("--lines", type=int, default=40, help="読む行数")
     sp.set_defaults(func=cmd_sniff)
 
-    sp = sub.add_parser("ryuw122", help="REYAX RYUW122 を 1 台ずつ設定する")
+    sp = sub.add_parser("ryuw122", help="REYAX RYUW122 を 1 台ずつ設定する",
+                        description="並べる前の準備。設定は Flash に残るので一度書けば済む。")
     sp.add_argument("action", choices=("info", "anchor", "tag-setup", "tag"),
                     help="info: 今の設定を読む / anchor: ANCHOR に設定 / "
                          "tag-setup: TAG に設定 / tag: TAG に設定して動かし続ける")
     sp.add_argument("--serial", required=True, help="シリアルポート (例 /dev/ttyUSB0)")
-    sp.add_argument("--baud", type=int, default=115200)
+    sp.add_argument("--baud", type=int, default=115200, help="シリアルのボーレート")
     sp.add_argument("--address", help="この機体のアドレス (8 バイト ASCII, 機体ごとに変える)")
     sp.add_argument("--network-id", help="NETWORKID (8 バイト ASCII, 全機で同じ)")
     sp.add_argument("--cpin", help="AES128 パスワード (32 文字, 全機で同じ)")
-    sp.add_argument("--channel", type=int, choices=(5, 9))
-    sp.add_argument("--bandwidth", type=int, choices=(0, 1))
-    sp.add_argument("--power", type=int, choices=range(6))
+    sp.add_argument("--channel", type=int, choices=(5, 9),
+                    help="RF チャネル 5: 6489.6MHz / 9: 7987.2MHz (全機で同じ)")
+    sp.add_argument("--bandwidth", type=int, choices=(0, 1),
+                    help="データレート 0: 850kbps / 1: 6.8Mbps (全機で同じ)")
+    sp.add_argument("--power", type=int, choices=range(6), help="送信出力 0-5 (5 が最大)")
     sp.add_argument("--cal", type=int, help="AT+CAL 距離校正 [cm], -100〜100")
     sp.add_argument("--payload", default="RNGE",
                     help="TAG が積むデータ (ANCHOR 側と 3 バイト以内の差にする)")
     sp.set_defaults(func=cmd_ryuw122)
 
-    sp = sub.add_parser("ui", help="ブラウザ UI を起動する")
-    sp.add_argument("--host", default="127.0.0.1")
-    sp.add_argument("--port", type=int, default=8765)
-    sp.add_argument("--no-browser", action="store_true")
+    sp = sub.add_parser("ui", help="ブラウザ UI を起動する",
+                        description="配置・誤差モデル・測位レベルの比較と、実機のライブ表示。")
+    sp.add_argument("--host", default="127.0.0.1",
+                    help="0.0.0.0 にすると同じ LAN の端末から開ける (認証は無い)")
+    sp.add_argument("--port", type=int, default=8765, help="待ち受けポート")
+    sp.add_argument("--no-browser", action="store_true", help="ブラウザを自動で開かない")
     sp.set_defaults(func=cmd_ui)
 
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     return int(args.func(args))
 
 

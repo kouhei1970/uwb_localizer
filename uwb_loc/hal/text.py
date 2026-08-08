@@ -133,11 +133,13 @@ class TextHal(UwbHal):
 
     @classmethod
     def from_path(cls, path: str, pattern: str, **kw: Any) -> "TextHal":
+        """保存したログファイルを読む."""
         return cls(open(path, "r", encoding="utf-8", errors="replace"), pattern,
                    name=f"text:{path}", **kw)
 
     @classmethod
     def from_serial(cls, port: str, baudrate: int, pattern: str, **kw: Any) -> "TextHal":
+        """シリアルポートを開いて読む (pyserial が要る)."""
         import io
 
         import serial  # type: ignore[import-not-found]
@@ -150,6 +152,7 @@ class TextHal(UwbHal):
 
     @classmethod
     def from_tcp(cls, host: str, port: int, pattern: str, **kw: Any) -> "TextHal":
+        """TCP で繋いで読む."""
         import socket
 
         sock = socket.create_connection((host, port))

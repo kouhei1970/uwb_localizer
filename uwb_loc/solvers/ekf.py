@@ -163,6 +163,7 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
         return np.kron(f1, eye), np.kron(q1, eye)
 
     def predict(self, dt: float) -> None:
+        """``dt`` 秒ぶん状態を進める (観測なしの時間経過)."""
         if dt <= 0.0:
             return
         fmat, qmat = self._transition(dt)

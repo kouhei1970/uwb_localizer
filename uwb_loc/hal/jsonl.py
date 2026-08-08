@@ -195,16 +195,20 @@ class JsonLinesWriter:
             self.write_anchors(anchors)
 
     def write_anchors(self, anchors: list[Anchor]) -> None:
+        """アンカー座標の行を書く. ログの先頭に 1 度だけ置く."""
         obj = {"v": 1, "type": "anchors", "anchors": [a.to_dict() for a in anchors]}
         self._f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
     def write(self, batch: MeasurementBatch) -> None:
+        """観測 1 エポックを 1 行書く."""
         self._f.write(json.dumps(batch.to_dict(), ensure_ascii=False) + "\n")
 
     def flush(self) -> None:
+        """バッファを吐き出す."""
         self._f.flush()
 
     def close(self) -> None:
+        """閉じる (未書き出しがあれば吐く)."""
         self._f.close()
 
     def __enter__(self) -> "JsonLinesWriter":

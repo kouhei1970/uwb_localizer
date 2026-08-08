@@ -474,6 +474,7 @@ class Ryuw122Hal(UwbHal):
         return list(self._anchors)
 
     def set_anchors(self, anchors: list[Anchor]) -> None:
+        """アンカー (= 固定した TAG) の座標を差し替える."""
         self._anchors = list(anchors)
 
     def poll(self, timeout: float = 0.0) -> list[MeasurementBatch]:
@@ -533,6 +534,7 @@ class Ryuw122Terminal:
 
     @classmethod
     def from_serial(cls, port: str, baudrate: int = 115200) -> "Ryuw122Terminal":
+        """シリアルポートを開く (既定 115200 は仕様書 4 節の既定値)."""
         stream, ser = _open_serial_stream(port, baudrate)
         t = cls(stream)
         t._serial = ser
@@ -545,6 +547,7 @@ class Ryuw122Terminal:
         self.close()
 
     def command(self, cmd: str, timeout: float = 1.0) -> list[str]:
+        """AT コマンドを 1 つ送り, 応答の行を返す. 送受信は :attr:`log` に残る."""
         out = _at_command(self._stream, cmd, timeout)
         self.log.append(f"{cmd} -> {' / '.join(out) or '(応答なし)'}")
         return out
@@ -578,6 +581,7 @@ class Ryuw122Terminal:
         return self.command("AT+FACTORY", timeout=2.0)
 
     def close(self) -> None:
+        """ポートを閉じる."""
         try:
             self._stream.close()
         except Exception:  # pragma: no cover
@@ -634,6 +638,7 @@ class Ryuw122Tag:
 
     @classmethod
     def from_serial(cls, port: str, baudrate: int = 115200, **kw: Any) -> "Ryuw122Tag":
+        """シリアルポートを開く (既定 115200 は仕様書 4 節の既定値)."""
         stream, ser = _open_serial_stream(port, baudrate)
         tag = cls(stream, **kw)
         tag._serial = ser  # type: ignore[attr-defined]
@@ -677,6 +682,7 @@ class Ryuw122Tag:
                 last = now
 
     def open(self) -> None:
+        """TAG として設定し, ``AT+TAG_SEND`` を積み続けるスレッドを起こす."""
         if self._thread is not None:
             return
         if self._do_setup:
@@ -687,6 +693,7 @@ class Ryuw122Tag:
         self._thread.start()
 
     def close(self) -> None:
+        """スレッドを止めてポートを閉じる."""
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)

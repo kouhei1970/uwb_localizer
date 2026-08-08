@@ -96,6 +96,7 @@ class Anchor:
         return float(np.sqrt(var + self.position_sigma**2))
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON に載る形の辞書にする. 座標は m のまま."""
         return {
             "id": self.id,
             "p": [float(v) for v in self.position],
@@ -108,6 +109,7 @@ class Anchor:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Anchor":
+        """``to_dict`` が出した辞書から復元する."""
         return cls(
             id=str(d["id"]),
             position=np.asarray(d["p"], dtype=float),
@@ -161,6 +163,7 @@ class Measurement:
     raw: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON Lines の 1 観測ぶんの辞書にする (``a`` / ``d`` などの短縮キー)."""
         d: dict[str, Any] = {
             "a": self.anchor_id,
             "type": self.kind.value,
@@ -181,6 +184,7 @@ class Measurement:
     def from_dict(cls, d: dict[str, Any], *, tag_id: str = "tag0", t: float = 0.0) -> "Measurement":
         # "d" (distance) は range の別名として受け付ける. 実機ファームウェアが
         # 距離を素直に "d" と書くことが多いため.
+        """観測 1 本の辞書から復元する. ``d`` は ``v`` の別名として受け付ける."""
         value = d.get("v")
         if value is None:
             value = d.get("d")
@@ -216,9 +220,11 @@ class MeasurementBatch:
         return len(self.measurements)
 
     def of_kind(self, kind: MeasKind) -> list[Measurement]:
+        """その種別の観測だけ取り出す."""
         return [m for m in self.measurements if m.kind is kind]
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON Lines の 1 行ぶんの辞書にする."""
         return {
             "v": WIRE_VERSION,
             "type": "meas",
@@ -229,6 +235,7 @@ class MeasurementBatch:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "MeasurementBatch":
+        """JSON Lines の 1 行から復元する."""
         t = float(d.get("t", 0.0))
         tag = str(d.get("tag", "tag0"))
         return cls(
@@ -303,6 +310,7 @@ class Fix:
 
     @classmethod
     def failed(cls, t: float = 0.0, n_total: int = 0, level: str = "") -> "Fix":
+        """測位できなかったことを表す Fix を作る (``ok=False``)."""
         return cls(
             position=np.full(3, np.nan),
             covariance=np.full((3, 3), np.nan),
@@ -313,6 +321,7 @@ class Fix:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """位置・共分散・品質指標を JSON に載る形にする."""
         return {
             "t": self.t,
             "ok": self.ok,

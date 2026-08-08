@@ -82,6 +82,7 @@ class ErrorModel:
     report_quality: bool = True
 
     def sigma_at(self, d: float) -> float:
+        """その距離での測距標準偏差 [m]."""
         return self.sigma0 + self.sigma_per_m * d
 
 
@@ -388,6 +389,7 @@ class Scenario:
     seed: int = 0
 
     def hal(self) -> SimulatedHal:
+        """この設定どおりの :class:`SimulatedHal` を作る."""
         return SimulatedHal(
             self.anchors,
             self.traj,
