@@ -34,6 +34,11 @@
 ul.Measurement(anchor_id="A0", value=3.214)     # [m]
 ```
 
+**経路 (UART か否か) は問わない。** ライブラリはシリアルポートも
+ソケットも直接は触らない。必要なのは上の 3 つの値だけで、それが
+どう届くかは呼ぶ側の自由 — シリアル・TCP・UDP・BLE・MQTT・ROS・
+ファイル・共有メモリ、何でもよい。
+
 ### 2. アンカー座標
 
 どこにアンカーがあるかを知らないと位置は出せない。3 つの入手方法がある。
@@ -260,6 +265,33 @@ for fix in ul.Pipeline(MyUartHal("/dev/ttyUSB0", anchors), level="Lv3").run():
 Lv3 が測距を届いた順に処理できるため。Lv0-Lv2 を使うなら
 1 エポックに 4 本以上まとめる必要がある。
 
+### D. 読みに行けない経路 — BLE 通知 / MQTT / ROS / UDP
+
+`readline()` できる経路 (シリアル・TCP・ファイル) は上の 3 通りで足りるが、
+**「届いたら呼ばれる」形の経路**はそもそも読みに行けない。
+その場合は `PushHal` に押し込む。
+
+```python
+hal = ul.PushHal(anchors)
+
+def on_ble_notify(_, data):          # BLE の通知コールバック
+    aid, dist = my_decode(data)      # 距離は m に直しておく
+    hal.push(aid, dist)              # ← 押し込むだけ
+
+client.start_notify(CHAR_UUID, on_ble_notify)
+
+for fix in ul.Pipeline(hal, level="Lv2").run():
+    print(fix.position, fix.sigma)
+```
+
+MQTT の `on_message`、ROS のサブスクライバ、UDP の受信ループ、USB HID、
+WebSocket — どれも同じ形になる。**UART である必要はまったくない。**
+
+1 本ずつ押し込んでも、Lv0-Lv2 が解けるようにエポックへ束ねてくれる
+(同じアンカーが再び来たら 1 巡完了とみなす)。Lv3 だけなら `group=False` で
+素通しにしてもよく、**そのときも精度は束ねた場合と変わらない**
+(フィルタの状態が厳密に一致することをテストで固定している)。
+
 ### どれを選ぶか
 
 | | 書く量 | 選ぶ場面 |
@@ -267,6 +299,7 @@ Lv3 が測距を届いた順に処理できるため。Lv0-Lv2 を使うなら
 | **A. HAL なし** | 3 行 | 既に自分でパースしている。**まずこれで試す** |
 | **B. JSON Lines** | ファームに printf 1 つ | ファームを触れる。Python を書きたくない |
 | **C. HAL クラス** | 20 行 | 再接続処理など、ストリームを自分で握りたい |
+| **D. `PushHal`** | 押し込む 1 行 | BLE 通知 / MQTT / ROS / UDP など読みに行けない経路 |
 | (`TextHal`) | 正規表現 1 本 | ファームを触れず、出力形式も変えられない |
 
 **測位側のコードはどれでも同じ。** 違うのは観測の入り口だけ。

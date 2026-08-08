@@ -125,6 +125,7 @@ fix = est.update(batch)          # → fix.position, fix.sigma, fix.gdop
 | **`TextHal`** | 正規表現 1 本 | ファームを触れず、出力形式も変えられない |
 | **`JsonLinesHal`** | ファームに `printf` 1 つ | ファームを書ける。時刻・品質値を正確に載せられる |
 | **`UwbHal` を継承** | 20 行 | 再接続など、ストリームを自分で握りたい |
+| **`PushHal`** | 押し込む 1 行 | BLE 通知 / MQTT / ROS / UDP など**読みに行けない経路** |
 
 JSON Lines はこの 1 行を吐くだけ (`a` と `d` が必須、他は任意):
 
@@ -133,6 +134,10 @@ JSON Lines はこの 1 行を吐くだけ (`a` と `d` が必須、他は任意)
 ```
 
 → 3 通りの動く最小形は [`examples/03_minimal_integration.py`](examples/03_minimal_integration.py)
+
+**経路 (UART か否か) は問わない。** ライブラリはシリアルポートもソケットも
+直接は触らない。シリアル・TCP・UDP・BLE・MQTT・ROS・ファイル、何で届いても
+同じように扱える。
 
 ### 渡す情報は 3 つだけ
 

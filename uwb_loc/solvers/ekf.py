@@ -9,7 +9,9 @@
   疎結合だとそのエポックは丸ごと捨てになる
 * TWR はアンカーを順にポーリングするので観測はもともと非同期に届く.
   「1 スキャン = 1 エポック」に束ねる必要がなく, 届いた瞬間に
-  predict→update すればよい. レイテンシが下がり, 速い機体で効く
+  predict→update すればよい. レイテンシが下がり, 速い機体で効く.
+  ただし**立ち上げだけは 1 本では足りない** — 測距 1 本は球面 1 枚でしかなく
+  位置が決まらないため, 揃うまで貯めてから始める (:meth:`_bootstrap`)
 * 幾何が悪い方向の情報だけを部分的に取り込める (共分散が正しく効く)
 
 更新は 1 本ずつ逐次に行い, イノベーションゲート (マハラノビス距離) で
@@ -20,6 +22,7 @@ NLOS を弾く. 共分散更新は Joseph 形にしてあるので, 逐次更新
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
@@ -113,6 +116,8 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
         # 側を保つだけなので, 一度どちらか分からないまま始まったら, その track
         # 全体が鏡像側である可能性が残り続ける.
         self._ambiguous = False
+        # 立ち上げ待ちの測距 (1 本ずつ届く経路で使う)
+        self._pending: list[Any] = []
         if getattr(self, "_init", None) is not None:
             self._init.reset()
 
@@ -251,10 +256,41 @@ class Lv3TightlyCoupledEKF(PositionEstimator):
     # ------------------------------------------------------------------
 
     def _bootstrap(self, batch: MeasurementBatch) -> bool:
-        """スナップショット測位でフィルタを立ち上げる."""
-        fix = self._init.update(batch)
+        """スナップショット測位でフィルタを立ち上げる.
+
+        **立ち上げだけは 1 本では足りない** — 測距 1 本は球面 1 枚でしかなく、
+        位置が決まらないため。走り出したあとは 1 本ずつでも更新できるので、
+        非同期に 1 本ずつ届く経路 (順繰りの TWR、BLE の通知など) のために、
+        直近の測距を貯めておいて揃った時点で立ち上げる。
+
+        貯める窓は ``max_dt`` 秒。同じアンカーが複数あれば新しい方を採る。
+        """
+        self._pending.extend(batch.measurements)
+        cutoff = batch.t - self.max_dt
+        self._pending = [m for m in self._pending if m.t >= cutoff]
+        # アンカーごとに最新の 1 本だけ残す (古い測距で薄めない)
+        newest: dict[str, Any] = {}
+        for m in self._pending:
+            prev = newest.get(m.anchor_id)
+            if prev is None or m.t >= prev.t:
+                newest[m.anchor_id] = m
+        seed = MeasurementBatch(t=batch.t, tag_id=batch.tag_id,
+                                measurements=list(newest.values()))
+
+        # 解ける最小本数 (dim+1) ちょうどで立ち上げると初期値が悪く、
+        # 収束するまでの過渡が長く尾を引く。少し余分に揃うまで待つ。
+        # ただし本当にアンカーが少ない現場で永久に待たないよう、
+        # 溜め始めてから max_dt 経ったら最小本数でも始める。
+        want = self.config.dim + 2
+        if len(seed) < want:
+            oldest = min((m.t for m in self._pending), default=batch.t)
+            if len(seed) < self.config.dim + 1 or batch.t - oldest < self.max_dt:
+                return False
+
+        fix = self._init.update(seed)
         if not fix.ok:
             return False
+        self._pending.clear()
         self.x = np.zeros(self.nx)
         self.x[: self.nd] = fix.position[: self.nd]
         self.P = np.eye(self.nx)

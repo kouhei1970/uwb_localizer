@@ -33,6 +33,7 @@ from typing import IO, Any
 
 from ..types import Anchor, MeasKind, Measurement, MeasurementBatch
 from .base import UwbHal
+from .grouping import EpochGrouper
 
 __all__ = ["TextHal", "UNITS", "sniff"]
 
@@ -220,16 +221,12 @@ class TextHal(UwbHal):
     # ------------------------------------------------------------------ 読み取り
 
     def _reader(self) -> None:
-        pending: list[Measurement] = []
-        seen: set[str] = set()
-        started = 0.0
-
-        def flush() -> None:
-            nonlocal pending, seen
-            if pending:
-                self._queue.put(self._make_batch(pending))
-            pending, seen = [], set()
-
+        # 束ね方は PushHal と共通 (hal/grouping.py).
+        grouper = EpochGrouper(
+            lambda b: self._queue.put(self._make_batch(b.measurements)),
+            group=self.group,
+            max_span=self.max_span,
+        )
         while not self._stop.is_set():
             try:
                 line = self._stream.readline()
@@ -242,24 +239,11 @@ class TextHal(UwbHal):
             found = self.parse(line, now)
             if found:
                 self.n_matched += 1
+                grouper.add(found, now)
             else:
                 self.n_unmatched += 1
-                continue
 
-            if not self.group:
-                self._queue.put(self._make_batch(found))
-                continue
-
-            for m in found:
-                # 同じアンカーが再び出た = 次の巡回に入った、とみなす.
-                if m.anchor_id in seen or (pending and now - started > self.max_span):
-                    flush()
-                if not pending:
-                    started = now
-                pending.append(m)
-                seen.add(m.anchor_id)
-
-        flush()
+        grouper.flush()
         self._eof = True
 
     def _make_batch(self, ms: list[Measurement]) -> MeasurementBatch:
