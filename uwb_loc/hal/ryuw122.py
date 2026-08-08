@@ -1,6 +1,7 @@
 """REYAX RYUW122 / RYUW122_Lite 用の HAL.
 
-仕様書: ``docs/datasheets/RYUW122_AT_Command_Guide.pdf`` (2024-03-12 版)
+仕様書: REYAX "RYUW122 AT COMMAND GUIDE" (2024-03-12 版).
+入手先とコードが参照している節の対応は ``docs/datasheets/README.md``.
 
 このモジュールの性質
 --------------------

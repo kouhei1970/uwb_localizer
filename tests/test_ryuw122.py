@@ -1,6 +1,6 @@
 """REYAX RYUW122 用 HAL の検証.
 
-実機が無いので、仕様書 (docs/datasheets/RYUW122_AT_Command_Guide.pdf) の
+実機が無いので、仕様書 (REYAX "RYUW122 AT COMMAND GUIDE" 2024-03-12 版) の
 応答どおりに振る舞う模擬モジュールを相手にする。
 """
 

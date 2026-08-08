@@ -11,3 +11,6 @@ venv/
 results/
 *.jsonl
 *.csv
+
+# ベンダのデータシートは再配布できないのでコミットしない (docs/datasheets/README.md)
+docs/datasheets/*.pdf

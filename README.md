@@ -287,4 +287,9 @@ Lv2 が Lv1 より崩れない、EKF がアンカー 2 本でも追従する、
 
 ## ライセンス
 
-MIT
+MIT — [LICENSE](LICENSE)
+
+ベンダのデータシート (REYAX RYUW122 の AT コマンド仕様書など) は
+**同梱していない**。著作権がメーカーにあり、この MIT ライセンスでは
+再配布できないため。入手先は
+[`docs/datasheets/README.md`](docs/datasheets/README.md)。
