@@ -170,6 +170,41 @@ GITHUB_BANNED_MACROS = (
 )
 
 
+def test_inline_math_has_no_line_break():
+    r"""インライン ``$...$`` の中に ``\\`` を書かない.
+
+    GitHub の Markdown はインライン数式の中身にもエスケープを掛けるので、
+    行列の行区切り ``\\`` が ``\`` に潰れて ``\begin{bmatrix}`` が壊れる。
+    表示数式 (``$$`` を独立行に置く形) なら潰れない。
+    実際に GitHub の出力で 1 件見つかった規則。
+    """
+    import re
+
+    inline = re.compile(r"(?<!\$)\$([^$\n]+?)\$(?!\$)")
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        in_code = in_block = False
+        for i, line in enumerate(md.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            if line.strip() == "$$":
+                in_block = not in_block
+                continue
+            line = _strip_inline_code(line)
+            if in_block or "$" not in line:
+                continue
+            for m in inline.finditer(line):
+                if "\\\\" in m.group(1):
+                    bad.append(f"{md.relative_to(ROOT)}:{i} {m.group(0)[:60]}")
+    assert not bad, ("インライン数式の中の \\\\ は潰れる。表示数式 ($$) にすること:\n  "
+                     + "\n  ".join(bad))
+
+
 def test_no_macros_that_github_rejects():
     r"""GitHub が弾くコマンドを使っていないか.
 

@@ -1069,7 +1069,13 @@ $$
 Q_1 = \int_0^{\Delta t} F(\tau)\,G\,\sigma_a^2\,G^\top F(\tau)^\top\,d\tau
 $$
 
-中身を計算する。 $F(\tau) G = \begin{bmatrix} 1 & \tau \\ 0 & 1\end{bmatrix}\begin{bmatrix} 0 \\ 1\end{bmatrix} = \begin{bmatrix} \tau \\ 1\end{bmatrix}$ なので
+中身を計算する。
+
+$$
+F(\tau) G = \begin{bmatrix} 1 & \tau \\ 0 & 1\end{bmatrix}\begin{bmatrix} 0 \\ 1\end{bmatrix} = \begin{bmatrix} \tau \\ 1\end{bmatrix}
+$$
+
+なので
 
 $$
 F(\tau)G\,G^\top F(\tau)^\top = \begin{bmatrix} \tau \\ 1\end{bmatrix}\begin{bmatrix} \tau & 1\end{bmatrix}
