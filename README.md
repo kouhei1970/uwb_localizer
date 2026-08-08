@@ -6,8 +6,11 @@ UWB の**距離情報だけ**からタグの位置を割り出すライブラリ
 API を調べるなら **[リファレンス](docs/REFERENCE.md)**、
 動くコードは **[サンプル集](examples/README.md)**。
 
-依存は **numpy だけ**。scipy を使わず Gauss-Newton も EKF も自前で書いてあるので、
-そのまま C に移植できる (扱う行列は最大 6×6)。
+依存は **numpy だけ**。scipy を使わず Gauss-Newton も EKF も自前で書いてある。
+
+**マイコン向けの C 版もある** → [c/README.md](c/README.md)。
+Lv0〜Lv3 をそのまま C99 に移してあり、malloc を呼ばず依存は libm の `sqrt` だけ。
+Python 版と同じ入力で **1e-11 m まで一致する**ことを毎回確認している。
 
 ## なぜ作ったか
 
@@ -592,6 +595,7 @@ python -m uwb_loc ryuw122 tag-setup --serial /dev/ttyUSB0 --address TAG00001
 | [docs/BRINGUP.md](docs/BRINGUP.md) | **実機で何を用意し何を渡すか** — モジュール別の目安 |
 | [docs/UWB_PROTOCOL.md](docs/UWB_PROTOCOL.md) | **HAL との約束事** — 単位・座標系・型・JSON Lines |
 | [docs/UWB_ALGORITHMS.md](docs/UWB_ALGORITHMS.md) | **中で何をしているか** — 式の導出、C 移植 |
+| [c/README.md](c/README.md) | **C 版** — マイコンで動かす (Lv0〜Lv3 を C99 に移植) |
 | [docs/DESIGN.md](docs/DESIGN.md) | **なぜこの設計にしたか** — 手法選定の記録 |
 
 # 例
@@ -611,7 +615,15 @@ python examples/06_troubleshooting.py       # 壊れ方から原因を当てる
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q      # 167 件
+python -m pytest -q      # 174 件 (C 版の突き合わせを含む)
+```
+
+C 版もここで一緒に検証している (ビルド・単精度・Python 版との突き合わせ)。
+C コンパイラが無い環境では skip される。
+
+```bash
+make -C c test          # C 版だけを走らせる (53 件)
+python tools/crossval.py --tol 1e-9    # Python 版と突き合わせる
 ```
 
 テストは数値の一致だけでなく、**アルゴリズムが持つべき性質**を検証している

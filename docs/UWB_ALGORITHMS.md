@@ -28,18 +28,24 @@
 
 ### 距離 (TWR)
 
-$$h_i(p) = \lVert p - a_i \rVert, \qquad \frac{\partial h_i}{\partial p} = \frac{p - a_i}{\lVert p - a_i\rVert} = u_i$$
+$$
+h_i(p) = \lVert p - a_i \rVert, \qquad \frac{\partial h_i}{\partial p} = \frac{p - a_i}{\lVert p - a_i\rVert} = u_i
+$$
 
 **ヤコビアンが単位ベクトルになる**のがこの問題の性質を決めている。幾何行列
 
-$$H = \begin{bmatrix} u_1^\top \\ \vdots \\ u_n^\top \end{bmatrix}$$
+$$
+H = \begin{bmatrix} u_1^\top \\ \vdots \\ u_n^\top \end{bmatrix}
+$$
 
 は距離ではなく**方向だけ**で決まる。だから精度の幾何依存性 (GDOP) が
 「アンカーがどの方向から見えるか」だけの関数になる。
 
 ### 距離差 (TDoA)
 
-$$h_i(p) = \lVert p - a_i \rVert - \lVert p - a_\text{ref} \rVert, \qquad \frac{\partial h_i}{\partial p} = u_i - u_\text{ref}$$
+$$
+h_i(p) = \lVert p - a_i \rVert - \lVert p - a_\text{ref} \rVert, \qquad \frac{\partial h_i}{\partial p} = u_i - u_\text{ref}
+$$
 
 ヤコビアンのノルムは高々 2 だが、タグが遠ざかって $u_i \to u_\text{ref}$ になると
 **0 に近づく**。TDoA がアンカーの外側で急激に悪化するのはこれが理由で、
@@ -49,9 +55,13 @@ $$h_i(p) = \lVert p - a_i \rVert - \lVert p - a_\text{ref} \rVert, \qquad \frac{
 
 $\Delta = p - a_i$、$\rho = \sqrt{\Delta_x^2+\Delta_y^2}$、$r^2 = \rho^2 + \Delta_z^2$ として
 
-$$h = \operatorname{atan2}(\Delta_y, \Delta_x), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_y}{\rho^2},\ \frac{\Delta_x}{\rho^2},\ 0\right)$$
+$$
+h = \operatorname{atan2}(\Delta_y, \Delta_x), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_y}{\rho^2},\ \frac{\Delta_x}{\rho^2},\ 0\right)
+$$
 
-$$h = \operatorname{atan2}(\Delta_z, \rho), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_z \Delta_x}{r^2\rho},\ -\frac{\Delta_z \Delta_y}{r^2\rho},\ \frac{\rho}{r^2}\right)$$
+$$
+h = \operatorname{atan2}(\Delta_z, \rho), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_z \Delta_x}{r^2\rho},\ -\frac{\Delta_z \Delta_y}{r^2\rho},\ \frac{\rho}{r^2}\right)
+$$
 
 方位角のヤコビアンのノルムは $1/\rho$。つまり同じ角度誤差 $\sigma_\theta$ でも位置誤差は
 $\rho\,\sigma_\theta$ に比例して増える。重み $1/\sigma_\theta^2$ を掛けるだけで
@@ -68,7 +78,9 @@ NLOS は電波の回り込みなので**距離を伸ばす側にしか出ない*
 
 HAL が返す $q \in [0,1]$ (見通し尤度) を
 
-$$\sigma_\text{eff} = \sigma \cdot \bigl(1 + 3(1-q)\bigr)$$
+$$
+\sigma_\text{eff} = \sigma \cdot \bigl(1 + 3(1-q)\bigr)
+$$
 
 で反映する。$q=1$ で等倍、$q=0$ で 4 倍 → 重みは 1/16 に落ちる。
 **観測を捨てるのではなく重みを下げる**のは、アンカー本数が少ないときに
@@ -82,12 +94,16 @@ $$\sigma_\text{eff} = \sigma \cdot \bigl(1 + 3(1-q)\bigr)$$
 
 測距方程式を展開すると
 
-$$\lVert p \rVert^2 - 2a_i^\top p + \lVert a_i \rVert^2 = r_i^2$$
+$$
+\lVert p \rVert^2 - 2a_i^\top p + \lVert a_i \rVert^2 = r_i^2
+$$
 
 非線形なのは $\lVert p \rVert^2$ だけで、しかも**全式に共通**。だから基準アンカー $j$ の式を
 引くと消える。
 
-$$2(a_j - a_i)^\top p = r_i^2 - r_j^2 - \lVert a_i\rVert^2 + \lVert a_j\rVert^2$$
+$$
+2(a_j - a_i)^\top p = r_i^2 - r_j^2 - \lVert a_i\rVert^2 + \lVert a_j\rVert^2
+$$
 
 $p$ について線形なので擬似逆行列 1 発。反復も初期値も要らない。
 
@@ -114,22 +130,30 @@ $p$ について線形なので擬似逆行列 1 発。反復も初期値も要�
 
 LLS は $\lVert p\rVert^2$ を**消した**。Beck 法は逆に**変数に昇格させる**。
 
-$$g = \lVert p \rVert^2, \qquad y = \begin{bmatrix} p \\ g\end{bmatrix} \in \mathbb{R}^{d+1}$$
+$$
+g = \lVert p \rVert^2, \qquad y = \begin{bmatrix} p \\ g\end{bmatrix} \in \mathbb{R}^{d+1}
+$$
 
 すると測距方程式は完全に線形になる。
 
-$$\underbrace{\begin{bmatrix} -2a_i^\top & 1\end{bmatrix}}_{A \text{ の第 } i \text{ 行}} y = \underbrace{r_i^2 - \lVert a_i\rVert^2}_{b_i} \qquad \Longrightarrow \qquad Ay = b$$
+$$
+\underbrace{\begin{bmatrix} -2a_i^\top & 1\end{bmatrix}}_{A \text{ の第 } i \text{ 行}} y = \underbrace{r_i^2 - \lVert a_i\rVert^2}_{b_i} \qquad \Longrightarrow \qquad Ay = b
+$$
 
 もちろん $y$ は自由ではなく、$g = \lVert p\rVert^2$ という拘束が 1 本つく。これは
 2 次形式で書ける。
 
-$$y^\top D y + 2f^\top y = 0, \qquad D = \begin{bmatrix} I_d & 0 \\ 0 & 0\end{bmatrix},\quad f = \begin{bmatrix} 0 \\ -1/2\end{bmatrix}$$
+$$
+y^\top D y + 2f^\top y = 0, \qquad D = \begin{bmatrix} I_d & 0 \\ 0 & 0\end{bmatrix},\quad f = \begin{bmatrix} 0 \\ -1/2\end{bmatrix}
+$$
 
 （検算: $y^\top D y = \lVert p\rVert^2$、$2f^\top y = -g$、和が 0。）
 
 つまり解くべきは
 
-$$\min_y\ \lVert W^{1/2}(Ay - b)\rVert^2 \quad \text{s.t.}\quad y^\top Dy + 2f^\top y = 0$$
+$$
+\min_y\ \lVert W^{1/2}(Ay - b)\rVert^2 \quad \text{s.t.}\quad y^\top Dy + 2f^\top y = 0
+$$
 
 **2 次目的関数 + 2 次拘束 1 本** = Generalized Trust Region Subproblem (GTRS)。
 非凸だが、GTRS には**双対ギャップがない**ことが知られていて、
@@ -137,27 +161,39 @@ $$\min_y\ \lVert W^{1/2}(Ay - b)\rVert^2 \quad \text{s.t.}\quad y^\top Dy + 2f^\
 
 ### 永年方程式
 
-$$\mathcal{L}(y,\lambda) = (Ay-b)^\top W (Ay-b) + \lambda\,(y^\top Dy + 2f^\top y)$$
+$$
+\mathcal{L}(y,\lambda) = (Ay-b)^\top W (Ay-b) + \lambda\,(y^\top Dy + 2f^\top y)
+$$
 
-$$\frac{\partial \mathcal{L}}{\partial y} = 0 \ \Longrightarrow\ (A^\top W A + \lambda D)\,y = A^\top W b - \lambda f$$
+$$
+\frac{\partial \mathcal{L}}{\partial y} = 0 \ \Longrightarrow\ (A^\top W A + \lambda D)\,y = A^\top W b - \lambda f
+$$
 
-$$\boxed{\ y(\lambda) = (A^\top W A + \lambda D)^{-1}(A^\top W b - \lambda f)\ }$$
+$$
+\boxed{\ y(\lambda) = (A^\top W A + \lambda D)^{-1}(A^\top W b - \lambda f)\ }
+$$
 
 あとは拘束を満たす $\lambda$ を探すだけ。
 
-$$\varphi(\lambda) = y(\lambda)^\top D\,y(\lambda) + 2f^\top y(\lambda) = 0$$
+$$
+\varphi(\lambda) = y(\lambda)^\top D\,y(\lambda) + 2f^\top y(\lambda) = 0
+$$
 
 ### なぜ二分法で必ず解けるのか
 
 $G = A^\top W A$ とする。$G + \lambda D \succ 0$ が成り立つ範囲を調べる。
 一般化固有値 $Dv = \gamma\,Gv$ に対し
 
-$$G + \lambda D \succ 0 \iff 1 + \lambda\gamma > 0 \ \ (\forall \gamma)$$
+$$
+G + \lambda D \succ 0 \iff 1 + \lambda\gamma > 0 \ \ (\forall \gamma)
+$$
 
 $D$ は半正定値 (階数 $d$) なので $\gamma \ge 0$。したがって条件は最大固有値 $\gamma_1$ が
 決める。
 
-$$\lambda > -1/\gamma_1$$
+$$
+\lambda > -1/\gamma_1
+$$
 
 この区間 $I = (-1/\gamma_1, \infty)$ の上で
 
@@ -193,14 +229,18 @@ $r_i^2$ の二乗バイアスは残るので厳密な最尤推定ではないが
 
 測距誤差がガウスなら、最尤推定はこれ。
 
-$$\hat{p} = \arg\min_p \sum_i w_i \bigl(z_i - h_i(p)\bigr)^2, \qquad w_i = 1/\sigma_i^2$$
+$$
+\hat{p} = \arg\min_p \sum_i w_i \bigl(z_i - h_i(p)\bigr)^2, \qquad w_i = 1/\sigma_i^2
+$$
 
 ### Gauss-Newton
 
 $e(p + \Delta) \approx e - J\Delta$ と 1 次近似して代入すると、
 $\Delta$ について線形最小二乗になる。正規方程式は
 
-$$\boxed{\ (J^\top W J)\,\Delta = J^\top W e, \qquad p \leftarrow p + \Delta\ }$$
+$$
+\boxed{\ (J^\top W J)\,\Delta = J^\top W e, \qquad p \leftarrow p + \Delta\ }
+$$
 
 $J$ の行は §1 のヤコビアン、$W = \operatorname{diag}(w_i)$。
 
@@ -214,7 +254,9 @@ $J^\top W J$ が特異に近づく状況が実際にある。
 
 そのまま解くと $\Delta$ が発散するので、減衰項を入れる。
 
-$$\left(J^\top W J + \lambda\,\frac{\operatorname{tr}(J^\top W J)}{n_\text{free}} I\right)\Delta = J^\top W e$$
+$$
+\left(J^\top W J + \lambda\,\frac{\operatorname{tr}(J^\top W J)}{n_\text{free}} I\right)\Delta = J^\top W e
+$$
 
 コストが下がったら $\lambda \leftarrow 0.3\lambda$、上がったら $\lambda \leftarrow 4\lambda$ で
 更新を破棄。$\lambda$ が大きいときは最急降下法に、小さいときは Gauss-Newton に
@@ -224,7 +266,9 @@ $$\left(J^\top W J + \lambda\,\frac{\operatorname{tr}(J^\top W J)}{n_\text{free}
 
 最適点でのフィッシャー情報行列は $J^\top W J$ なので
 
-$$\operatorname{Cov}(\hat{p}) \approx (J^\top W J)^{-1}$$
+$$
+\operatorname{Cov}(\hat{p}) \approx (J^\top W J)^{-1}
+$$
 
 これを `Fix.covariance` として返す。運用時に「今の値を信じてよいか」を
 判断するための数字で、位置だけ返すライブラリは現場で困る。
@@ -257,11 +301,15 @@ $z$ は既知として固定するので、共分散も 2×2 部分だけが埋�
 
 二乗損失の代わりにフーバー損失を使う。$u = e/\sigma$ として
 
-$$\rho(u) = \begin{cases} \tfrac{1}{2}u^2 & |u| \le k \\ k|u| - \tfrac{1}{2}k^2 & |u| > k\end{cases}$$
+$$
+\rho(u) = \begin{cases} \tfrac{1}{2}u^2 & |u| \le k \\ k|u| - \tfrac{1}{2}k^2 & |u| > k\end{cases}
+$$
 
 勾配は $\psi(u) = \rho'(u)$ で、これを $\psi(u) = \mathcal{W}(u)\cdot u$ と書き直すと
 
-$$\mathcal{W}(u) = \frac{\psi(u)}{u} = \begin{cases} 1 & |u| \le k \\ k/|u| & |u| > k\end{cases}$$
+$$
+\mathcal{W}(u) = \frac{\psi(u)}{u} = \begin{cases} 1 & |u| \le k \\ k/|u| & |u| > k\end{cases}
+$$
 
 **勾配が「重み $\mathcal{W}$ 付きの最小二乗の勾配」と同じ形になる**。だから
 「重みを残差から作り直しては解く」を繰り返せばよい (IRLS: Iteratively
@@ -282,7 +330,9 @@ Tukey の biweight ($\mathcal{W} = (1-(u/k)^2)^2$、$|u|>k$ で 0) も用意し�
 NLOS は距離を**伸ばす側にしか出ない**。$e = z - h$ の符号なら $e > 0$ 側。
 そこでしきい値を符号で変える。
 
-$$k_i = \begin{cases} 0.6\,k & e_i > 0 \quad (\text{NLOS の疑いあり}) \\ k & e_i \le 0 \quad (\text{単なる雑音}) \end{cases}$$
+$$
+k_i = \begin{cases} 0.6\,k & e_i > 0 \quad (\text{NLOS の疑いあり}) \\ k & e_i \le 0 \quad (\text{単なる雑音}) \end{cases}
+$$
 
 「短すぎる側」は雑音でしか起きないので効率を落とさず、
 「長すぎる側」だけ厳しく見る。実測で RMSE 0.350 → 0.297 m (§8)。
@@ -346,15 +396,19 @@ Lv2 は前回の推定を初期値に使わない (`warm_start=False`)。
 
 状態は軸ごとの積分器の連鎖。CV なら $x = [p; v]$、CA なら $x = [p; v; a]$。
 
-$$F_1[i][j] = \frac{\Delta t^{\,j-i}}{(j-i)!} \quad (j \ge i), \qquad F = F_1 \otimes I_d$$
+$$
+F_1[i][j] = \frac{\Delta t^{\,j-i}}{(j-i)!} \quad (j \ge i), \qquad F = F_1 \otimes I_d
+$$
 
 クロネッカー積で軸に広げる (軸は独立と仮定)。
 
 プロセスノイズは**最上位の微分に連続時間の白色雑音が乗る**モデルで統一する。
 $Q = \int_0^{\Delta t} F(\tau)\,G\sigma^2 G^\top F(\tau)^\top\,d\tau$ を解いて
 
-$$Q_1^{\text{CV}} = \sigma_a^2\begin{bmatrix} \Delta t^3/3 & \Delta t^2/2 \\ \Delta t^2/2 & \Delta t\end{bmatrix}, \qquad
-Q_1^{\text{CA}} = \sigma_j^2\begin{bmatrix} \Delta t^5/20 & \Delta t^4/8 & \Delta t^3/6 \\ \Delta t^4/8 & \Delta t^3/3 & \Delta t^2/2 \\ \Delta t^3/6 & \Delta t^2/2 & \Delta t\end{bmatrix}$$
+$$
+Q_1^{\text{CV}} = \sigma_a^2\begin{bmatrix} \Delta t^3/3 & \Delta t^2/2 \\ \Delta t^2/2 & \Delta t\end{bmatrix}, \qquad
+Q_1^{\text{CA}} = \sigma_j^2\begin{bmatrix} \Delta t^5/20 & \Delta t^4/8 & \Delta t^3/6 \\ \Delta t^4/8 & \Delta t^3/3 & \Delta t^2/2 \\ \Delta t^3/6 & \Delta t^2/2 & \Delta t\end{bmatrix}
+$$
 
 離散版 (1 ステップ中は加速度一定と見なす $\Gamma\Gamma^\top$ 形、$\Delta t^4/4$ が出るもの) と
 **混ぜないこと**。`sigma_a` の意味がモードによって変わってしまう。
@@ -363,15 +417,21 @@ Q_1^{\text{CA}} = \sigma_j^2\begin{bmatrix} \Delta t^5/20 & \Delta t^4/8 & \Delt
 
 観測は位置にしか依存しないので $H = [\partial h/\partial p,\ 0,\ \ldots]$ (1×$n_x$)。
 
-$$\nu = z - h(\hat{x}), \qquad S = HPH^\top + \sigma^2 \quad (\text{スカラー})$$
+$$
+\nu = z - h(\hat{x}), \qquad S = HPH^\top + \sigma^2 \quad (\text{スカラー})
+$$
 
-$$K = \frac{PH^\top}{S}, \qquad \hat{x} \leftarrow \hat{x} + K\nu$$
+$$
+K = \frac{PH^\top}{S}, \qquad \hat{x} \leftarrow \hat{x} + K\nu
+$$
 
 $S$ がスカラーなので**行列の逆行列が一切要らない**。これは C 移植で効く。
 
 共分散は Joseph 形で更新する。
 
-$$P \leftarrow (I - KH)P(I - KH)^\top + K\sigma^2K^\top$$
+$$
+P \leftarrow (I - KH)P(I - KH)^\top + K\sigma^2K^\top
+$$
 
 最適 $K$ に対しては $(I-KH)P$ と代数的に等価だが、丸め誤差が乗っても
 **対称性と半正定値性が壊れにくい**。スカラー更新を 1 エポックに何本も繰り返すので
@@ -407,12 +467,16 @@ $|\nu| > \gamma\sqrt{S}$ ($\gamma$ は既定 3) の観測はそのエポック�
 基準アンカーまでの距離 $d_\text{ref}$ を**補助未知数に加える**と線形になる、
 という GPS 由来の手当て。$r_i = d_i - d_\text{ref}$ (観測) として
 
-$$d_i = d_\text{ref} + r_i \ \Longrightarrow\ \lVert p\rVert^2 - 2a_i^\top p + K_i = d_\text{ref}^2 + 2d_\text{ref}r_i + r_i^2$$
+$$
+d_i = d_\text{ref} + r_i \ \Longrightarrow\ \lVert p\rVert^2 - 2a_i^\top p + K_i = d_\text{ref}^2 + 2d_\text{ref}r_i + r_i^2
+$$
 
 基準アンカーの式 $\lVert p\rVert^2 - 2a_\text{ref}^\top p + K_\text{ref} = d_\text{ref}^2$ を引くと
 $\lVert p\rVert^2$ と $d_\text{ref}^2$ が両方消える。
 
-$$\boxed{\ 2(a_i - a_\text{ref})^\top p + 2r_i\,d_\text{ref} = K_i - K_\text{ref} - r_i^2\ }$$
+$$
+\boxed{\ 2(a_i - a_\text{ref})^\top p + 2r_i\,d_\text{ref} = K_i - K_\text{ref} - r_i^2\ }
+$$
 
 未知数 $[p;\,d_\text{ref}]$ について線形。$n-1 \ge d+1$ 本あれば WLS で解ける。
 
@@ -429,7 +493,9 @@ $$\boxed{\ 2(a_i - a_\text{ref})^\top p + 2r_i\,d_\text{ref} = K_i - K_\text{ref
 
 ガウス誤差のとき、位置に関するフィッシャー情報は
 
-$$\mathcal{F} = \sum_i \frac{1}{\sigma_i^2}\,u_i u_i^\top$$
+$$
+\mathcal{F} = \sum_i \frac{1}{\sigma_i^2}\,u_i u_i^\top
+$$
 
 クラメール・ラオ下限は $\operatorname{Cov}(\hat{p}) \succeq \mathcal{F}^{-1}$。
 `crlb_at` は $\sqrt{\operatorname{tr}(\mathcal{F}^{-1})}$ を返す。
@@ -443,7 +509,9 @@ $$\mathcal{F} = \sum_i \frac{1}{\sigma_i^2}\,u_i u_i^\top$$
 
 全 $\sigma_i$ を 1 とおいた (= 行を単位ベクトルに正規化した) ときの
 
-$$\text{GDOP} = \sqrt{\operatorname{tr}\bigl((H^\top H)^{-1}\bigr)}$$
+$$
+\text{GDOP} = \sqrt{\operatorname{tr}\bigl((H^\top H)^{-1}\bigr)}
+$$
 
 $\sigma_p \approx \text{GDOP} \times \sigma_\text{range}$ という読み方をする、
 純粋な幾何の増幅率。実装では $H^\top H$ の階数を先に見て、
@@ -466,11 +534,15 @@ $\sigma_p \approx \text{GDOP} \times \sigma_\text{range}$ という読み方を�
 **問題そのものの多義性**である。アンカーが平面 $n^\top x = c$ 上にあるとき、
 任意の点 $p$ とその鏡像
 
-$$p' = p - 2\,(n^\top p - c)\,n$$
+$$
+p' = p - 2\,(n^\top p - c)\,n
+$$
 
 は**すべてのアンカーからの距離が厳密に等しい**。
 
-$$\lVert p' - a_i\rVert = \lVert p - a_i\rVert \quad (\forall i)$$
+$$
+\lVert p' - a_i\rVert = \lVert p - a_i\rVert \quad (\forall i)
+$$
 
 残差はどちらも完全に同じなので、**測距値だけからはどちらか選べない**。
 どんなアルゴリズムを使っても解決しない。
@@ -514,7 +586,9 @@ warm start が偶然側を保つので 0.28 m で、レベルの順序が逆転�
 
 距離行列 $D$ から座標を復元する。二重中心化行列
 
-$$B = -\tfrac{1}{2}\,J D^{\circ 2} J, \qquad J = I - \tfrac{1}{n}\mathbf{1}\mathbf{1}^\top$$
+$$
+B = -\tfrac{1}{2}\,J D^{\circ 2} J, \qquad J = I - \tfrac{1}{n}\mathbf{1}\mathbf{1}^\top
+$$
 
 は、中心化した座標 $X$ のグラム行列 $XX^\top$ に一致する。
 （$D^2_{ij} = \lVert x_i\rVert^2 + \lVert x_j\rVert^2 - 2x_i^\top x_j$ の
@@ -533,7 +607,9 @@ $$B = -\tfrac{1}{2}\,J D^{\circ 2} J, \qquad J = I - \tfrac{1}{n}\mathbf{1}\math
 
 ### Gauss-Newton による仕上げ
 
-$$\min_X \sum_{(i,j)\in\text{既知}} w_{ij}\bigl(\lVert x_i - x_j\rVert - d_{ij}\bigr)^2$$
+$$
+\min_X \sum_{(i,j)\in\text{既知}} w_{ij}\bigl(\lVert x_i - x_j\rVert - d_{ij}\bigr)^2
+$$
 
 ペア $(i,j)$ のヤコビアンは $\partial/\partial x_i = u_{ij}$、$\partial/\partial x_j = -u_{ij}$。
 座標系の自由度 (3 次元で並進 3 + 回転 3 = 6) の分だけ $H$ は必ず特異になるが、
@@ -561,7 +637,9 @@ LM 減衰がそれを吸収する。
 
 自己測量の座標系は任意なので、実測した 3 台以上に重ねる (Kabsch 法)。
 
-$$M = X_\text{src}^\top X_\text{dst} = U\Sigma V^\top \ \Longrightarrow\ R = VU^\top$$
+$$
+M = X_\text{src}^\top X_\text{dst} = U\Sigma V^\top \ \Longrightarrow\ R = VU^\top
+$$
 
 `align_to_reference` がこれ。全台を巻き尺で測る必要はなく、
 高さの違う 4 台を実測すれば、残りは自己測量に任せられる。

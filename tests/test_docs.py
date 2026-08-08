@@ -114,3 +114,59 @@ def test_python_blocks_in_docs_compile():
             except SyntaxError as e:
                 broken.append(f"{md.relative_to(ROOT)} ブロック{i} 行{e.lineno}: {e.msg}")
     assert not broken, "構文エラーのあるコードブロック:\n  " + "\n  ".join(broken)
+
+
+def test_display_math_uses_github_block_form():
+    """表示数式が GitHub で壊れない形になっているか.
+
+    GitHub の Markdown は 1 行形式の ``$$...$$`` の中身にもインラインの
+    エスケープを掛けるので、行列の行区切り ``\\\\`` が ``\\`` に潰れて
+    ``\\begin{bmatrix}`` が壊れる。公式に案内されている
+
+        $$
+        式
+        $$
+
+    の形なら中身はそのまま数式として扱われる。
+    """
+    import re
+
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        in_code = False
+        for i, line in enumerate(md.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            if re.search(r"\$\$.*\S.*\$\$", line):
+                bad.append(f"{md.relative_to(ROOT)}:{i} 1 行形式の $$ — {line.strip()[:60]}")
+    assert not bad, "GitHub で壊れる表示数式:\n  " + "\n  ".join(bad)
+
+
+def test_inline_math_delimiters_are_balanced():
+    """インライン数式の $ が閉じているか (奇数個だと以降が数式扱いになる)."""
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        in_code = in_block = False
+        for i, line in enumerate(md.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            if line.strip() == "$$":
+                in_block = not in_block
+                continue
+            if in_block:
+                continue
+            if line.count("$") % 2 != 0:
+                bad.append(f"{md.relative_to(ROOT)}:{i} $ が奇数個 — {line.strip()[:60]}")
+        if in_block:
+            bad.append(f"{md.relative_to(ROOT)} $$ ブロックが閉じていない")
+    assert not bad, "数式の区切りが合っていない:\n  " + "\n  ".join(bad)

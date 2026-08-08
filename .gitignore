@@ -14,3 +14,11 @@ results/
 
 # ベンダのデータシートは再配布できないのでコミットしない (docs/datasheets/README.md)
 docs/datasheets/*.pdf
+c/*.o
+c/src/*.o
+c/libuwbloc.a
+c/tests/test_uwb
+c/examples/01_snapshot
+c/examples/02_tracking
+c/examples/03_replay
+c/**/*.su

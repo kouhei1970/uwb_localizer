@@ -14,7 +14,8 @@
 | **RYUW122** を使いたい | [RYUW122.md](RYUW122.md) |
 | ほかのチップを実機で立ち上げたい | [BRINGUP.md](BRINGUP.md) |
 | 自分の HAL を書きたい / ログ形式を知りたい | [UWB_PROTOCOL.md](UWB_PROTOCOL.md) |
-| 中で何をしているか知りたい / C に移植したい | [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md) |
+| 中で何をしているか知りたい | [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md) |
+| **マイコン (C) で動かしたい** | [../c/README.md](../c/README.md) |
 | なぜこの手法なのか知りたい | [DESIGN.md](DESIGN.md) |
 
 ## 各ファイルの役割
@@ -30,6 +31,7 @@
 | [UWB_PROTOCOL.md](UWB_PROTOCOL.md) | **HAL とライブラリの約束事** — 単位・座標系・型・JSON Lines スキーマ | 測位の中身 |
 | [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md) | **中で何をしているか** — 式の導出、実装との対応、C 移植 | 使い方 |
 | [DESIGN.md](DESIGN.md) | **なぜこの設計にしたか** — 手法選定の記録、採らなかった案 | 現在の使い方 (古くなりうる) |
+| [../c/README.md](../c/README.md) | **C 版の使い方と移植** — 大きさ、Python 版との違い | アルゴリズムの導出 (→ UWB_ALGORITHMS.md) |
 
 ### `UWB_ALGORITHMS.md` と `DESIGN.md` の違い
 
