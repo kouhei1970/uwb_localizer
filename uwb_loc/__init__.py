@@ -31,7 +31,16 @@ from .calibration import (
     self_survey,
 )
 from .geometry import anchor_condition, crlb_at, gdop_at, gdop_map
-from .hal import JsonLinesHal, JsonLinesWriter, PushHal, TextHal, UwbHal, sniff
+from .hal import (
+    JsonLinesHal,
+    JsonLinesWriter,
+    PushHal,
+    Ryuw122Config,
+    Ryuw122Hal,
+    TextHal,
+    UwbHal,
+    sniff,
+)
 from .metrics import error_cdf, error_series, error_stats
 from .model import MeasurementModel
 from .pipeline import Pipeline, run_offline
@@ -65,6 +74,8 @@ __all__ = [
     "UwbHal",
     "TextHal",
     "PushHal",
+    "Ryuw122Hal",
+    "Ryuw122Config",
     "sniff",
     "JsonLinesHal",
     "JsonLinesWriter",

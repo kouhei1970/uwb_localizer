@@ -126,6 +126,7 @@ fix = est.update(batch)          # → fix.position, fix.sigma, fix.gdop
 | **`JsonLinesHal`** | ファームに `printf` 1 つ | ファームを書ける。時刻・品質値を正確に載せられる |
 | **`UwbHal` を継承** | 20 行 | 再接続など、ストリームを自分で握りたい |
 | **`PushHal`** | 押し込む 1 行 | BLE 通知 / MQTT / ROS / UDP など**読みに行けない経路** |
+| **`Ryuw122Hal`** | ポートを指定するだけ | **REYAX RYUW122 / RYUW122_Lite** — AT コマンドまで面倒を見る |
 
 JSON Lines はこの 1 行を吐くだけ (`a` と `d` が必須、他は任意):
 
@@ -243,6 +244,7 @@ python -m uwb_loc ui --port 8765
 |---|---|
 | [docs/UWB.md](docs/UWB.md) | 使い方 |
 | [docs/BRINGUP.md](docs/BRINGUP.md) | **実機立ち上げ** (何を用意し何を渡すか、モジュール別の目安) |
+| [docs/RYUW122.md](docs/RYUW122.md) | **REYAX RYUW122 専用の手順** (配置の取り方、AT 設定、UI からの接続) |
 | [docs/UWB_PROTOCOL.md](docs/UWB_PROTOCOL.md) | **HAL とのデータ交換仕様** (単位・座標系・時刻の規約、JSON Lines) |
 | [docs/UWB_ALGORITHMS.md](docs/UWB_ALGORITHMS.md) | **アルゴリズムの導出** (式と実装の対応、踏んだ罠) |
 | [docs/UWB_POSITIONING.md](docs/UWB_POSITIONING.md) | 手法選定の経緯 |
