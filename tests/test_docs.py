@@ -22,6 +22,18 @@ sys.path.insert(0, str(ROOT / "docs"))
 from build_reference import first_line, public_methods, render  # noqa: E402
 
 
+def _strip_inline_code(line: str) -> str:
+    """行内のコードスパン (`...`) を落とす.
+
+    ``\`$\`` のように「$ という文字」を説明している箇所を数式と
+    取り違えないため。中身は空白に置き換えて桁をずらさない。
+    """
+    import re
+
+    return re.sub(r"`[^`]*`", lambda m: " " * len(m.group(0)), line)
+
+
+
 def test_reference_is_up_to_date():
     """docs/REFERENCE.md が生成し直した結果と一致するか."""
     current = (ROOT / "docs" / "REFERENCE.md").read_text(encoding="utf-8")
@@ -142,6 +154,7 @@ def test_display_math_uses_github_block_form():
                 continue
             if in_code:
                 continue
+            line = _strip_inline_code(line)
             if re.search(r"\$\$.*\S.*\$\$", line):
                 bad.append(f"{md.relative_to(ROOT)}:{i} 1 行形式の $$ — {line.strip()[:60]}")
     assert not bad, "GitHub で壊れる表示数式:\n  " + "\n  ".join(bad)
@@ -174,6 +187,7 @@ def test_no_macros_that_github_rejects():
             if line.strip().startswith("```"):
                 in_code = not in_code
                 continue
+            line = _strip_inline_code(line)
             if in_code or "$" not in line:
                 continue
             for macro in GITHUB_BANNED_MACROS:
@@ -195,7 +209,7 @@ def test_inline_math_is_preceded_by_ascii_space():
         行頭                  19        1
         非 ASCII               0       26     ← 全滅
 
-    「。$x$」のように日本語の直後に置くと出ない。半角空白を 1 つ挟めばよい。
+    日本語の直後に置くと出ない (``。$x$``)。半角空白を 1 つ挟めばよい。
     実物の確認は ``python tools/check_github_math.py docs/UWB_ALGORITHMS.md``。
     """
     import re
@@ -215,6 +229,7 @@ def test_inline_math_is_preceded_by_ascii_space():
             if line.strip() == "$$":
                 in_block = not in_block
                 continue
+            line = _strip_inline_code(line)
             if in_block or "$" not in line:
                 continue
             for m in inline.finditer(line):
@@ -244,7 +259,7 @@ def test_inline_math_delimiters_are_balanced():
                 continue
             if in_block:
                 continue
-            if line.count("$") % 2 != 0:
+            if _strip_inline_code(line).count("$") % 2 != 0:
                 bad.append(f"{md.relative_to(ROOT)}:{i} $ が奇数個 — {line.strip()[:60]}")
         if in_block:
             bad.append(f"{md.relative_to(ROOT)} $$ ブロックが閉じていない")
