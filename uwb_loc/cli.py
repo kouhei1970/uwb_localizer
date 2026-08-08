@@ -4,6 +4,7 @@
     python -m uwb_loc sim --levels Lv0,Lv2,Lv3
     python -m uwb_loc replay log.jsonl --anchors anchors.json --level Lv3
     python -m uwb_loc gdop --room 8 6 2.6
+    python -m uwb_loc sniff --serial /dev/ttyUSB0   # 実機の出力を覗いて解釈できるか見る
     python -m uwb_loc survey dist.csv        # 相互測距からアンカー配置を推定
 """
 
@@ -14,12 +15,14 @@ import json
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from .calibration import self_survey
 from .geometry import anchor_condition, crlb_at, gdop_map
 from .hal.jsonl import JsonLinesHal, JsonLinesWriter
+from .hal.text import TextHal, sniff
 from .metrics import error_stats
 from .pipeline import run_offline
 from .sim import ErrorModel, SimulatedHal, room_anchors, trajectory
@@ -174,6 +177,66 @@ def cmd_survey(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- sniff
+
+
+def cmd_sniff(args: argparse.Namespace) -> int:
+    """実機の出力を覗いて、測距として解釈できるかを確かめる.
+
+    実機立ち上げの最初にやること。ここで単位とアンカー ID を確定させておかないと、
+    位置がおかしいときに「測距が変」なのか「座標が変」なのか切り分けられない。
+    """
+    if args.serial:
+        import io
+
+        import serial  # type: ignore[import-not-found]
+
+        ser = serial.Serial(args.serial, args.baud, timeout=1.0)
+        stream: Any = io.TextIOWrapper(ser, encoding="utf-8", errors="replace")
+    elif args.tcp:
+        import socket
+
+        host, _, port = args.tcp.rpartition(":")
+        stream = socket.create_connection((host, int(port))).makefile(
+            "r", encoding="utf-8", errors="replace")
+    elif args.file:
+        stream = open(args.file, "r", encoding="utf-8", errors="replace")
+    else:
+        stream = sys.stdin
+
+    r = sniff(stream, args.pattern, n=args.lines, unit=args.unit,
+              anchor_prefix=args.prefix)
+
+    print(f"読んだ行  {r['lines']}")
+    print(f"解釈できた行  {r['matched']}")
+    print(f"使った正規表現  {r['pattern']}")
+    print()
+    print("生の行:")
+    for ln in r["samples"]:
+        print(f"  | {ln}")
+    print()
+    if not r["matched"]:
+        print("測距として解釈できませんでした。--pattern で正規表現を指定してください。")
+        print(r"  例: --pattern '(?P<anchor>A\d+):\s*(?P<dist>[\d.]+)'")
+        return 1
+
+    print(f"見つかったアンカー ID  {r['anchors']}")
+    lo, hi = r["ranges"]
+    print(f"距離の範囲  {lo:.3f} 〜 {hi:.3f} m  (単位 --unit {args.unit} として換算)")
+    if hi > 200.0:
+        print("  警告: 距離が大きすぎます。--unit mm か --unit cm ではありませんか。")
+    elif hi < 0.05:
+        print("  警告: 距離が小さすぎます。--unit の指定を見直してください。")
+    else:
+        print("  → 妥当な範囲です。次はアンカー座標を用意してください。")
+    print()
+    print("この ID と単位をそのまま TextHal に渡せば測位できます:")
+    print(f"    ul.TextHal.from_serial(port, baud, r\"{r['pattern']}\",")
+    print(f"                           anchors=anchors, unit=\"{args.unit}\""
+          + (f", anchor_prefix=\"{args.prefix}\"" if args.prefix else "") + ")")
+    return 0
+
+
 # --------------------------------------------------------------------------- ui
 
 
@@ -233,6 +296,17 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("matrix")
     sp.add_argument("--dim", type=int, default=3, choices=(2, 3))
     sp.set_defaults(func=cmd_survey)
+
+    sp = sub.add_parser("sniff", help="実機の出力を覗いて測距として読めるか確かめる")
+    sp.add_argument("--serial", help="シリアルポート (例 /dev/ttyUSB0)")
+    sp.add_argument("--baud", type=int, default=115200)
+    sp.add_argument("--tcp", help="host:port")
+    sp.add_argument("--file", help="保存したログ")
+    sp.add_argument("--pattern", help="正規表現 (省略すると推測する)")
+    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"))
+    sp.add_argument("--prefix", default="", help="アンカー ID の接頭辞 (例 A)")
+    sp.add_argument("--lines", type=int, default=40, help="読む行数")
+    sp.set_defaults(func=cmd_sniff)
 
     sp = sub.add_parser("ui", help="ブラウザ UI を起動する")
     sp.add_argument("--host", default="127.0.0.1")

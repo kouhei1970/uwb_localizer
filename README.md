@@ -50,29 +50,89 @@ Lv2   測位率 100.0%  RMSE3D  0.312  RMSE2D  0.146  CEP50  0.081  CEP95  0.207
 Lv3   測位率 100.0%  RMSE3D  0.153  RMSE2D  0.081  CEP50  0.062  CEP95  0.138  最大  0.595  [m]
 ```
 
+## 何をしないか
+
+先に境界をはっきりさせておく。このライブラリは**測位の計算だけ**を担当する。
+
+| | |
+|---|---|
+| **やる** | 距離 → 位置 (最小二乗・ロバスト化・カルマンフィルタ)、NLOS 除去、<br>共分散と品質指標、配置評価 (GDOP/CRLB)、自己測量、アンテナ遅延推定 |
+| **やらない** | **UWB チップの制御** (SPI/レジスタ、割り込み)、**測距シーケンス** (DS-TWR の<br>フレーム往復、タイムスタンプ処理)、チャネル設定、アンカーの設置 |
+
+つまり **「測距値が既に取れている」ところから始まる**。まだなら、先に
+モジュールのファームウェアを動かす必要がある。DWM1001 のように工場出荷で
+距離が出るモジュールなら今日つながるが、DW3000 を素から立ち上げるなら
+このライブラリに届くまでに数週間かかる。
+
+→ **[docs/BRINGUP.md](docs/BRINGUP.md)** に、何を用意して何を渡せばよいか、
+モジュール別の目安つきでまとめてある。
+
 ## 実機につなぐ
+
+### まず出力を覗く
+
+多くのモジュールは、何もしなくても既に距離をシリアルに吐いている。
+形式がばらばらなだけで情報は出ているので、まずそれを見る。
+
+```bash
+python -m uwb_loc sniff --serial /dev/ttyUSB0 --unit mm --prefix A
+```
+
+```
+解釈できた行  39 / 40
+使った正規表現  (?P<anchor>\d+)\s*,\s*(?P<dist>-?[\d.]+)
+見つかったアンカー ID  ['A0', 'A1', 'A2', 'A3']
+距離の範囲  2.887 〜 5.102 m  (単位 --unit mm として換算)
+  → 妥当な範囲です。次はアンカー座標を用意してください。
+```
+
+正規表現は省略すると推測する。距離が桁違いなら単位の指定が違う。
+
+### つなぐ
+
+`sniff` が出した正規表現をそのまま渡す。**ファームウェアの改造も
+Python のクラス書きも要らない。**
 
 ```python
 import uwb_loc as ul
 
-hal = ul.JsonLinesHal.from_serial("/dev/ttyUSB0", 115200)   # or 自前の UwbHal
-for fix in ul.Pipeline(hal, level="Lv3").run():
+hal = ul.TextHal.from_serial("/dev/ttyUSB0", 115200,
+                             r"range,(?P<anchor>\d+),(?P<dist>\d+)",
+                             anchors=anchors, unit="mm", anchor_prefix="A")
+for fix in ul.Pipeline(hal, level="Lv2").run():
     if fix.ok:
-        print(f"{fix.t:.2f}  {fix.position}  ±{fix.sigma:.2f} m  ({fix.n_used}/{fix.n_total} 本)")
+        print(f"{fix.position.round(2)}  ±{fix.sigma:.2f} m  ({fix.n_used}/{fix.n_total} 本)")
 ```
 
-HAL の書き方は 2 通りある。どちらでも測位側のコードは変わらない。
+つなぎ方は 3 通りある。どれでも測位側のコードは変わらない。
 
-| 方法 | 実装するもの | 向いている場面 |
+| 方法 | 手間 | 向いている場面 |
 |---|---|---|
-| **Python HAL クラス** | `UwbHal` を継承して `anchors` と `poll` の 2 つだけ | Python から直接チップを叩く |
-| **JSON Lines** | ファームウェアが 1 行 1 JSON を print するだけ | Python を書かずに繋ぎたい |
+| **`TextHal`** | 正規表現 1 本 | 既存ファームが何か吐いている。**まずこれ** |
+| **`JsonLinesHal`** | ファームを少し改造 | 自分でファームを書ける。時刻・品質値を正確に載せられる |
+| **`UwbHal` を継承** | Python を 30 行 | SPI で直接叩く、独自プロトコル |
 
 ```json
 {"v":1,"type":"meas","t":12.345,"tag":"tag0","meas":[
   {"a":"A0","d":3.214,"q":0.93},
   {"a":"A1","d":2.887,"q":0.41}]}
 ```
+
+### 渡す情報は 3 つだけ
+
+| | 何 | 必要な場面 |
+|---|---|---|
+| 1 | **アンカー ID と距離 [m]** | 必須 |
+| 2 | **アンカー座標** | 必須 (自己測量で推定してもよい) |
+| 3 | **時刻 [s]** | **Lv3 (EKF) のみ**。Lv0-Lv2 は使わない |
+
+時刻の有無は効く。実測 (8 台配置、10 Hz、NLOS 10%、RMSE 3D):
+
+| 時刻の与え方 | Lv3 | Lv2 |
+|---|---|---|
+| ファームが出す時刻 | **0.21 m** | 0.43 m |
+| 無し (ログを一気に流す) | 1.33 m | 0.43 m |
+| 無し + `rate_hz=10` で合成 | **0.21 m** | 0.43 m |
 
 ## 測位レベル
 
@@ -149,6 +209,7 @@ python -m uwb_loc ui
 python -m uwb_loc sim --levels Lv0,Lv2,Lv3 --nlos 0.2 --log run.jsonl
 python -m uwb_loc replay run.jsonl --level Lv3 --out fixes.csv
 python -m uwb_loc gdop --room 8 6 2.6 --n-low 0     # 天井のみ配置を評価
+python -m uwb_loc sniff --serial /dev/ttyUSB0       # 実機の出力を覗く
 python -m uwb_loc survey distances.csv --dim 3      # 相互測距 → アンカー配置
 python -m uwb_loc ui --port 8765
 ```
@@ -158,6 +219,7 @@ python -m uwb_loc ui --port 8765
 | | |
 |---|---|
 | [docs/UWB.md](docs/UWB.md) | 使い方 |
+| [docs/BRINGUP.md](docs/BRINGUP.md) | **実機立ち上げ** (何を用意し何を渡すか、モジュール別の目安) |
 | [docs/UWB_PROTOCOL.md](docs/UWB_PROTOCOL.md) | **HAL とのデータ交換仕様** (単位・座標系・時刻の規約、JSON Lines) |
 | [docs/UWB_ALGORITHMS.md](docs/UWB_ALGORITHMS.md) | **アルゴリズムの導出** (式と実装の対応、踏んだ罠) |
 | [docs/UWB_POSITIONING.md](docs/UWB_POSITIONING.md) | 手法選定の経緯 |
@@ -189,7 +251,7 @@ python docs/social/build_card.py
 ## 開発
 
 ```bash
-python -m pytest -q      # 52 件
+python -m pytest -q      # 65 件
 ```
 
 テストは数値の一致だけでなく、**アルゴリズムが持つべき性質**を検証している
