@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -193,3 +195,41 @@ def test_metrics_handle_failed_fixes():
     stats = ul.error_stats(truth, est)
     assert stats["availability"] == pytest.approx(0.8)
     assert stats["rmse_3d"] == pytest.approx(0.0)
+
+
+def test_align_warns_when_reference_cannot_fix_reflection():
+    """基準点が足りない / 同一平面だと鏡像が決まらず、黙って裏返る.
+
+    3 点はどちら向きでも同じだけよく合ってしまうので、Kabsch では
+    区別できない。実測で 7 m 以上ずれたことがあるので警告を出す。
+    """
+    pos = np.array([[0.0, 0.0, 2.4], [8.0, 0.0, 0.3], [8.0, 6.0, 2.4],
+                    [0.0, 6.0, 0.3], [4.0, 0.0, 2.4], [4.0, 6.0, 0.3]])
+    anchors = [ul.Anchor(f"A{i}", p) for i, p in enumerate(pos)]
+    dmat = np.linalg.norm(pos[:, None] - pos[None, :], axis=-1)
+    ids = [a.id for a in anchors]
+
+    with pytest.warns(UserWarning, match="3 点しかありません"):
+        ul.align_to_reference(ul.self_survey(dmat, ids, dim=3),
+                              {a.id: a.position for a in anchors[:3]})
+
+    # 高さの違う 4 点なら警告なしで厳密に復元できる
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        got = ul.align_to_reference(ul.self_survey(dmat, ids, dim=3),
+                                    {a.id: a.position for a in anchors[:4]})
+    for r, a in zip(got, anchors):
+        assert np.allclose(r.position, a.position, atol=1e-6)
+
+
+def test_align_warns_when_reference_points_are_coplanar():
+    """4 点あっても同一平面なら鏡像は決まらない."""
+    pos = np.array([[0.0, 0.0, 2.4], [8.0, 0.0, 2.4], [8.0, 6.0, 2.4],
+                    [0.0, 6.0, 2.4], [4.0, 3.0, 0.3], [1.0, 5.0, 0.3]])
+    anchors = [ul.Anchor(f"A{i}", p) for i, p in enumerate(pos)]
+    dmat = np.linalg.norm(pos[:, None] - pos[None, :], axis=-1)
+    ids = [a.id for a in anchors]
+
+    with pytest.warns(UserWarning, match="同一平面"):
+        ul.align_to_reference(ul.self_survey(dmat, ids, dim=3),
+                              {a.id: a.position for a in anchors[:4]})

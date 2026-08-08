@@ -92,3 +92,25 @@ def test_no_broken_local_links():
             if not (md.parent / target).exists():
                 broken.append(f"{md.relative_to(ROOT)} -> {target}")
     assert not broken, "リンク切れ:\n  " + "\n  ".join(broken)
+
+
+def test_python_blocks_in_docs_compile():
+    """ドキュメントの ```python ブロックが構文として通るか.
+
+    省略のつもりで書いた `...` は、dict の中では SyntaxError になる
+    (``{"A0": [0, 0, 2.4], ...}`` など)。写して動かす読者が最初に踏むので、
+    省略は「裸の ...」ではなくコメントで書く。
+    """
+    import re
+
+    block = re.compile(r"```python\n(.*?)```", re.S)
+    broken = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        for i, code in enumerate(block.findall(md.read_text(encoding="utf-8")), 1):
+            try:
+                compile(code, str(md), "exec")
+            except SyntaxError as e:
+                broken.append(f"{md.relative_to(ROOT)} ブロック{i} 行{e.lineno}: {e.msg}")
+    assert not broken, "構文エラーのあるコードブロック:\n  " + "\n  ".join(broken)

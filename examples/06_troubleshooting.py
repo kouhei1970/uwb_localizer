@@ -194,7 +194,7 @@ print("現場では悩まず、まず録る")
 print("=" * 78)
 print("""  writer = ul.JsonLinesWriter("run.jsonl")
   writer.write_anchors(anchors)      # 先頭にアンカー座標を 1 行
-  for batch in ...:
+  for batch in hal.poll(0.1):
       writer.write(batch)            # 観測を 1 エポック 1 行
   writer.close()
 

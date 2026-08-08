@@ -1,5 +1,7 @@
 # チュートリアル — 手を動かして覚える
 
+> **この文書**: 使い方を順を追って覚える。網羅的な一覧は [REFERENCE.md](REFERENCE.md)、式の導出は [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md)。 → [ドキュメント一覧](README.md)
+
 UWB も測位も初めて、という前提で書いてある。**上から順に写して動かせば、
 最後には実機の距離から位置が出せるようになる。**
 
@@ -206,7 +208,8 @@ print(ul.anchor_condition(anchors))
 
 ```python
 # 1. 高さをばらす ← 一番よい
-anchors = [ul.Anchor("A0", [0, 0, 2.4]), ul.Anchor("A1", [8, 0, 0.3]), ...]
+anchors = [ul.Anchor("A0", [0.0, 0.0, 2.4]),        # 天井
+           ul.Anchor("A1", [8.0, 0.0, 0.3])]        # 床付近 — 以下同様に台数分
 
 # 2. 2D で解く (高さが分かっているなら)
 est = ul.make_estimator("Lv2", anchors, ul.SolveConfig(dim=2, z_fixed=1.2))
@@ -256,7 +259,7 @@ A3      ,6.00,10.0,8.00,0
 ```
 
 出てくるのは**形だけ合った座標**で、向きと原点は決まっていない。
-実測した 3〜4 台を基準に実寸へ合わせる:
+実測した 4 台以上 (高さをばらす) を基準に実寸へ合わせる:
 
 ```python
 anchors = ul.self_survey(dist_matrix, ids, dim=3)
@@ -393,7 +396,8 @@ def on_ble_notify(anchor_id, dist_m):        # コールバックの中で
 #### RYUW122 なら専用 HAL
 
 ```python
-hal = ul.Ryuw122Hal.from_serial("/dev/ttyUSB0", ["TAG00001", "TAG00002", ...],
+hal = ul.Ryuw122Hal.from_serial("/dev/ttyUSB0",
+                                [a.id for a in anchors],   # 呼ぶ TAG の順番
                                 anchors=anchors)
 ```
 
@@ -454,7 +458,7 @@ for a in anchors:
 ```python
 writer = ul.JsonLinesWriter("run.jsonl")
 writer.write_anchors(anchors)
-for batch in ...:
+for batch in hal.poll(0.1):
     writer.write(batch)
 ```
 

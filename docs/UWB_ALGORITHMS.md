@@ -1,7 +1,9 @@
 # UWB 測位アルゴリズム — 導出と実装の詳細
 
+> **この文書**: 中で何をしているか (式の導出と実装の対応、C 移植)。**なぜ**その手法にしたかは [DESIGN.md](DESIGN.md)。 → [ドキュメント一覧](README.md)
+
 `uwb_loc` が実際に何を計算しているかを式で追える形にしたもの。
-選定の経緯は [UWB_POSITIONING.md](UWB_POSITIONING.md)、使い方は [UWB.md](UWB.md)。
+選定の経緯は [DESIGN.md](DESIGN.md)、使い方は [TUTORIAL.md](TUTORIAL.md)。
 
 記号
 
@@ -562,7 +564,7 @@ LM 減衰がそれを吸収する。
 $$M = X_\text{src}^\top X_\text{dst} = U\Sigma V^\top \ \Longrightarrow\ R = VU^\top$$
 
 `align_to_reference` がこれ。全台を巻き尺で測る必要はなく、
-3〜4 台実測すれば残りは自己測量に任せられる。
+高さの違う 4 台を実測すれば、残りは自己測量に任せられる。
 
 ---
 

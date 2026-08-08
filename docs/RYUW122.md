@@ -1,5 +1,7 @@
 # REYAX RYUW122 / RYUW122_Lite で測位する
 
+> **この文書**: REYAX RYUW122 固有の手順。チップ非依存の使い方は [TUTORIAL.md](TUTORIAL.md)。 → [ドキュメント一覧](README.md)
+
 仕様書: REYAX "RYUW122 AT COMMAND GUIDE" (2024-03-12 版)。
 リポジトリには**同梱していない** (再配布できないため)。入手先と、コードが
 参照している節の対応は [`docs/datasheets/README.md`](datasheets/README.md)。
@@ -79,7 +81,7 @@ PC ── UART ── RYUW122 (ANCHOR, 移動する)
 
 一般的な UWB の構成だが、距離が各 ANCHOR の UART に出るので
 **ANCHOR の数だけホスト接続が要る**。各 ANCHOR の MCU から距離を集めて
-1 箇所に流す仕組みを自分で用意し、[`TextHal`](UWB.md) か `PushHal` に
+1 箇所に流す仕組みを自分で用意し、[`TextHal`](UWB_PROTOCOL.md) か `PushHal` に
 渡す方が早い。
 
 **移動体の上で自己位置を知る用途には使えない。** 上記のとおり TAG 側の

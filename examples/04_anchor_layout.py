@@ -174,5 +174,5 @@ err = [float(np.linalg.norm(r.position - a.position))
        for r, a in zip(recovered, anchors)]
 print(f"  測距に 5 cm の誤差を入れて 6 台を復元 → 座標誤差 "
       f"平均 {np.mean(err) * 100:.1f} cm / 最大 {np.max(err) * 100:.1f} cm")
-print("  実測が要るのは基準の 4 台だけ。残りは相互測距から出せる。")
+print("  実測が要るのは基準の 4 台だけ (高さをばらすこと)。残りは相互測距から出せる。")
 print("  CLI からも:  python -m uwb_loc survey distances.csv --dim 3")

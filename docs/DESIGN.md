@@ -1,9 +1,12 @@
-# UWB 測位ライブラリ — 測位アルゴリズムの選定
+# 設計の記録 — なぜこの測位アルゴリズムにしたか
+
+> **この文書**: **なぜ**この設計にしたかの記録 (実装前の検討と、採らなかった案)。**現在の使い方の情報源としては使わないこと** — 実装は動き続けるので、今どう動くかは [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md)、使い方は [TUTORIAL.md](TUTORIAL.md)。 → [ドキュメント一覧](README.md)
 
 特定の UWB チップ (DW1000/DW3000, NXP SR150, Qorvo, ESP32-UWB …) に依存せず、
 **各 UWB 用に書いた HAL から観測量を受け取って位置を出す**ライブラリの設計。
 なぜその手法を選んだかを残すための文書。式の導出は [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md)、
-使い方は [UWB.md](UWB.md)、HAL との取り決めは [UWB_PROTOCOL.md](UWB_PROTOCOL.md) にある。
+使い方は [TUTORIAL.md](TUTORIAL.md)、HAL との取り決めは
+[UWB_PROTOCOL.md](UWB_PROTOCOL.md)、式の導出は [UWB_ALGORITHMS.md](UWB_ALGORITHMS.md)。
 
 ## 決定事項
 

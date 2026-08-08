@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from .types import Anchor
@@ -173,6 +175,31 @@ def apply_gauge(pts: np.ndarray, *, dim: int = 3) -> np.ndarray:
     return pts
 
 
+def _warn_if_reference_cannot_fix_reflection(dst_points: np.ndarray) -> None:
+    """既知点が鏡像を決められる配置か見て, 危なければ警告する.
+
+    3 点は必ず 1 つの平面に乗るので, その平面に関して折り返した配置も
+    同じだけよく合ってしまう. 4 点以上あっても同一平面なら同じこと.
+    黙って裏返るより, ここで気づける方がよい.
+    """
+    n = len(dst_points)
+    if n < 4:
+        warnings.warn(
+            f"align_to_reference: 既知点が {n} 点しかありません。3 次元では"
+            "同一平面に乗らない 4 点以上ないと鏡像 (裏返り) が決まらず、"
+            "推定が丸ごと反対側になることがあります。",
+            stacklevel=3)
+        return
+    centered = dst_points - dst_points.mean(axis=0)
+    sv = np.linalg.svd(centered, compute_uv=False)
+    if sv[0] > _EPS and sv[-1] / sv[0] < 0.05:
+        warnings.warn(
+            "align_to_reference: 既知点がほぼ同一平面に並んでいます。"
+            "鏡像 (裏返り) が決まらず、推定が丸ごと反対側になることがあります。"
+            "高さの違う点を基準に加えてください。",
+            stacklevel=3)
+
+
 def align_to_reference(
     anchors: list[Anchor],
     reference: dict[str, np.ndarray],
@@ -191,8 +218,10 @@ def align_to_reference(
     anchors:
         :func:`self_survey` の出力.
     reference:
-        アンカー ID -> 実測座標 [m]. 3 次元なら 3 点以上 (同一直線上でないこと),
-        2 次元なら 2 点以上.
+        アンカー ID -> 実測座標 [m]. **3 次元なら同一平面に乗らない 4 点以上**
+        必要. 3 点だと鏡像 (どちら向きに折り返しているか) が決まらず,
+        推定が丸ごと裏返ることがある —— 3 点はどちらの向きでも同じだけ
+        よく合ってしまうため. 足りないときは警告を出す.
     allow_reflection:
         鏡像反転を許すか. 相互測距だけからは鏡像が決まらないので, 通常は True.
 
@@ -207,6 +236,8 @@ def align_to_reference(
         raise ValueError("既知点が 3 点以上必要")
 
     src = np.array([by_id[i].position for i in ids], dtype=float)
+    _warn_if_reference_cannot_fix_reflection(dst_points=np.array(
+        [np.asarray(reference[i], dtype=float).reshape(3) for i in ids]))
     dst = np.array([np.asarray(reference[i], dtype=float).reshape(3) for i in ids])
     src_c, dst_c = src.mean(axis=0), dst.mean(axis=0)
 

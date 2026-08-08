@@ -112,10 +112,8 @@ RYUW122 は **1 台の ANCHOR が 1 台の TAG を名指しして測距する**�
 1 台、固定する側に複数台が要る。
 
 固定側の台数と精度の関係を、シミュレータで測った結果 (8×6×2.6 m の部屋、
-測距誤差 σ = 8 cm、NLOS 15%、5 seed 平均):
-
-seed ごとに測って、**中央値と最悪ケースを並べた** (平均だけだと、たまに起きる
-破綻が見えない):
+測距誤差 σ = 8 cm、NLOS 15%、Lv2/Lv3、8 seed)。**seed ごとに出して中央値と
+最悪ケースを並べてある** —— 平均だけだと、たまに起きる破綻が見えないため:
 
 | 固定する台数 | Lv2 中央 | Lv2 最悪 | Lv3 中央 | Lv3 最悪 | 測位率 |
 |---|---|---|---|---|---|
@@ -292,7 +290,7 @@ python -m uwb_loc survey distances.csv --dim 3     # → アンカー座標の J
 ```
 
 これで出るのは**形だけ合った座標**(向きと原点は決まっていない)。実測した
-3〜4 台を基準に実寸へ合わせる:
+4 台以上 (高さをばらす) を基準に実寸へ合わせる:
 
 ```python
 anchors = ul.self_survey(dist_matrix, ids, dim=3)
@@ -533,7 +531,12 @@ ul.crlb_at([4, 3, 1.2], anchors)      # 位置誤差の理論下限 [m]
 ul.anchor_condition(anchors)          # 同一平面かどうか (3D では致命的)
 
 anchors = ul.self_survey(dist_matrix, ids, dim=3)   # 相互測距からアンカー配置を推定
-anchors = ul.align_to_reference(anchors, {"A0": [0, 0, 2.4], ...})
+anchors = ul.align_to_reference(anchors, {          # 高さの違う 4 点以上が要る (3 点だと裏返る)
+    "A0": [0.0, 0.0, 2.4],
+    "A1": [8.0, 0.0, 0.3],
+    "A2": [8.0, 6.0, 2.4],
+    "A3": [0.0, 6.0, 0.3],
+})
 
 delays = ul.estimate_antenna_delays(anchor_ids, measured, true_distance)
 ```
@@ -578,18 +581,18 @@ python -m uwb_loc ryuw122 tag-setup --serial /dev/ttyUSB0 --address TAG00001
 # ドキュメント
 
 はじめてなら **チュートリアル**、書いている途中で調べるなら **リファレンス**。
+どれを読めばよいかは [docs/README.md](docs/README.md) に一覧がある。
 
-| | |
+| | 答える問い |
 |---|---|
-| [docs/TUTORIAL.md](docs/TUTORIAL.md) | **チュートリアル** — 用語から実機接続まで 6 章。**まずここ** |
-| [docs/REFERENCE.md](docs/REFERENCE.md) | **リファレンス** — 全コマンド・全オプション・全 API (コードから生成) |
-| [examples/README.md](examples/README.md) | **サンプル集の解説** — 6 本、全部ハードなしで動く |
-| [docs/RYUW122.md](docs/RYUW122.md) | **REYAX RYUW122 の詳細** (配置、AT 設定、`AT+TAG_SEND` の仕組み) |
-| [docs/BRINGUP.md](docs/BRINGUP.md) | **実機立ち上げ** (何を用意し何を渡すか、モジュール別の目安) |
-| [docs/UWB.md](docs/UWB.md) | 使い方 |
-| [docs/UWB_PROTOCOL.md](docs/UWB_PROTOCOL.md) | **HAL とのデータ交換仕様** (単位・座標系・時刻の規約、JSON Lines) |
-| [docs/UWB_ALGORITHMS.md](docs/UWB_ALGORITHMS.md) | **アルゴリズムの導出** (式と実装の対応、踏んだ罠) |
-| [docs/UWB_POSITIONING.md](docs/UWB_POSITIONING.md) | 手法選定の経緯 |
+| [docs/TUTORIAL.md](docs/TUTORIAL.md) | **どう使うか** — 用語から実機接続まで 6 章。**まずここ** |
+| [docs/REFERENCE.md](docs/REFERENCE.md) | **何があるか** — 全コマンド・全オプション・全 API (コードから生成) |
+| [examples/README.md](examples/README.md) | **どのコードを見るか** — 6 本、全部ハードなしで動く |
+| [docs/RYUW122.md](docs/RYUW122.md) | **RYUW122 固有の手順** — AT 設定、配置、TAG 側の準備 |
+| [docs/BRINGUP.md](docs/BRINGUP.md) | **実機で何を用意し何を渡すか** — モジュール別の目安 |
+| [docs/UWB_PROTOCOL.md](docs/UWB_PROTOCOL.md) | **HAL との約束事** — 単位・座標系・型・JSON Lines |
+| [docs/UWB_ALGORITHMS.md](docs/UWB_ALGORITHMS.md) | **中で何をしているか** — 式の導出、C 移植 |
+| [docs/DESIGN.md](docs/DESIGN.md) | **なぜこの設計にしたか** — 手法選定の記録 |
 
 # 例
 
@@ -608,7 +611,7 @@ python examples/06_troubleshooting.py       # 壊れ方から原因を当てる
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q      # 164 件
+python -m pytest -q      # 167 件
 ```
 
 テストは数値の一致だけでなく、**アルゴリズムが持つべき性質**を検証している
