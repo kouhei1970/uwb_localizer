@@ -72,6 +72,10 @@ for (const file of files) {
     }
     if (inBlock) { blockBuf.push(line); return; }
 
+    // インラインコード (`...`) の中の $ は数式ではない。
+    // 「`$` という文字」を説明している箇所を拾わないよう、同じ長さの空白に潰す。
+    line = line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
+
     // インライン $...$
     const re = /\$([^$\n]+)\$/g;
     let m;

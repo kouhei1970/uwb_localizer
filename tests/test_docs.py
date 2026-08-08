@@ -171,7 +171,7 @@ GITHUB_BANNED_MACROS = (
 
 
 def test_no_macros_that_github_rejects():
-    """GitHub が弾くコマンドを使っていないか.
+    r"""GitHub が弾くコマンドを使っていないか.
 
     ``\operatorname`` は普通の KaTeX では通るが GitHub では通らない。
     代わりに ``\mathrm`` を使う。
@@ -264,3 +264,43 @@ def test_inline_math_delimiters_are_balanced():
         if in_block:
             bad.append(f"{md.relative_to(ROOT)} $$ ブロックが閉じていない")
     assert not bad, "数式の区切りが合っていない:\n  " + "\n  ".join(bad)
+
+
+def _github_anchor(heading: str) -> str:
+    """GitHub が見出しから作るアンカー名を再現する.
+
+    小文字化 → 記号を落とす → 空白をハイフンに、が大枠。
+    日本語はそのまま残る。
+    """
+    import re
+    import unicodedata
+
+    text = heading.strip().lstrip("#").strip()
+    text = text.lower()
+    # 記号を落とす (英数字・空白・ハイフン・アンダースコア・CJK は残す)
+    out = []
+    for ch in text:
+        if ch.isalnum() or ch in " -_":
+            out.append(ch)
+        elif unicodedata.category(ch).startswith(("L", "N")):
+            out.append(ch)
+    return "".join(out).replace(" ", "-")
+
+
+def test_internal_anchor_links_resolve():
+    """同じファイル内の見出しリンク (#...) が実在するか.
+
+    章立ての多い文書では、見出しを直すとリンクが黙って切れる。
+    """
+    import re
+
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        text = md.read_text(encoding="utf-8")
+        anchors = {_github_anchor(ln) for ln in text.split("\n") if ln.startswith("#")}
+        for target in re.findall(r"\]\((#[^)]+)\)", text):
+            if target[1:] not in anchors:
+                bad.append(f"{md.relative_to(ROOT)} -> {target}")
+    assert not bad, ("見出しリンクが切れている:\n  " + "\n  ".join(bad))
