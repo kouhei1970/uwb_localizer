@@ -275,16 +275,25 @@ class LiveSession:
                 hal = build_hal()
                 self._hal = hal
                 hal.open()
-                use = hal.anchors or anchors
-                if not use:
-                    self.error = ("アンカー座標がありません。左パネルで配置するか、"
-                                  "観測源から anchors メッセージを送ってください。")
-                    return
-                est = make_estimator(level, use, config, **_estimator_kwargs(level, req))
                 realtime = source == "sim"
                 dt = 1.0 / float(req.get("rate", 10.0))
+
+                # 測位器はアンカーが分かってから作る。JSON Lines は観測源が
+                # anchors メッセージで座標を送ってくることがあり、それは
+                # open() 直後にはまだ読めていない (読み取りは別スレッド)。
+                est = None
                 while not self.stop_flag.is_set() and hal.is_open:
                     for batch in hal.poll(0.5):
+                        if est is None:
+                            use = hal.anchors or anchors
+                            if not use:
+                                self.error = (
+                                    "アンカー座標がありません。左パネルで配置するか、"
+                                    "観測源から anchors メッセージを送ってください。")
+                                hal.close()
+                                return
+                            est = make_estimator(level, use, config,
+                                                 **_estimator_kwargs(level, req))
                         fix = est.update(batch)
                         row = fix.to_dict()
                         if isinstance(hal, SimulatedHal):
