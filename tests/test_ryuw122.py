@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import queue
+import time
 import threading
 
 import numpy as np
@@ -241,3 +242,190 @@ def test_rssi_becomes_a_quality_value():
 def test_requires_at_least_one_tag():
     with pytest.raises(ValueError, match="TAG"):
         Ryuw122Hal(FakeModule({}), [])
+
+
+# --------------------------------------------------------------------- TAG 側
+
+
+class FakeTagModule:
+    """TAG 側の RYUW122 を真似るシリアルもどき.
+
+    実機と同じく **``AT+TAG_SEND`` で積んでいないと ANCHOR に読まれない**。
+    設定は Flash に残る前提で辞書に保持し、``AT+XXX?`` に応答する。
+    """
+
+    #: AT+FACTORY の出荷時値 (仕様書 20 節)。ADDRESS も NETWORKID も
+    #: **全機共通**なのがポイント。並べる前に変えないと衝突する。
+    FACTORY = {
+        "MODE": "0", "IPR": "115200", "CHANNEL": "5", "BANDWIDTH": "0",
+        "NETWORKID": "REYAX123", "ADDRESS": "DAVID123",
+        "CPIN": "0" * 32, "TAGD": "0,0", "CAL": "0", "CRFOP": "5", "RSSI": "0",
+    }
+
+    def __init__(self) -> None:
+        self.settings = dict(self.FACTORY)
+        self._out: queue.Queue[str] = queue.Queue()
+        self.staged: str | None = None
+        self.received: list[str] = []
+        self.closed = False
+
+    # --- ストリームとしての振る舞い
+    def write(self, data: str) -> None:
+        for line in data.replace("\r", "").split("\n"):
+            line = line.strip()
+            if line:
+                self._handle(line)
+
+    def flush(self) -> None:
+        pass
+
+    def readline(self) -> str:
+        try:
+            return self._out.get(timeout=0.02)
+        except queue.Empty:
+            return ""
+
+    def close(self) -> None:
+        self.closed = True
+
+    # --- ANCHOR 側から読まれる
+    def consume(self) -> str | None:
+        """ANCHOR が測距しにきた. 積んであれば読めて, +TAG_RCV が出る."""
+        if self.staged is None:
+            return None
+        data, self.staged = self.staged, None
+        self._out.put(f"+TAG_RCV={len(data)},{data}\n")
+        return data
+
+    # --- AT の解釈
+    def _handle(self, cmd: str) -> None:
+        self.received.append(cmd)
+        if cmd == "AT+UID?":
+            self._out.put("+UID=123456789012345678901234\n")
+            self._out.put("+OK\n")
+            return
+        if cmd == "AT+VER?":
+            self._out.put("+VER=RYUW122_V0.0.1\n")
+            self._out.put("+OK\n")
+            return
+        if cmd == "AT+FACTORY":
+            self.settings = dict(self.FACTORY)
+            self._out.put("+OK\n")
+            return
+        if cmd.startswith("AT+TAG_SEND="):
+            _n, _, data = cmd.split("=", 1)[1].partition(",")
+            self.staged = data
+            self._out.put("+OK\n")
+            return
+        if cmd.endswith("?"):
+            key = cmd[3:-1]
+            if key in self.settings:
+                self._out.put(f"+{key}={self.settings[key]}\n")
+                self._out.put("+OK\n")
+            else:
+                self._out.put("+ERR=1\n")
+            return
+        if cmd.startswith("AT+") and "=" in cmd:
+            key, _, value = cmd[3:].partition("=")
+            if key not in self.settings:
+                self._out.put("+ERR=1\n")
+                return
+            self.settings[key] = value
+            self._out.put("+OK\n")
+            return
+        self._out.put("+OK\n")
+
+
+def test_terminal_reads_the_current_settings():
+    """立ち上げでハマったとき最初に見るところ."""
+    fake = FakeTagModule()
+    t = ul.Ryuw122Terminal(fake)
+    info = t.info()
+    assert info["mode"] == "0"                     # 出荷時は TAG
+    assert info["address"] == "DAVID123"
+    assert info["network_id"] == "REYAX123"
+    # UID は書き換えられない機体固有値 (96 bit = 24 桁)
+    assert info["uid"] == "123456789012345678901234"
+    assert info["version"] == "RYUW122_V0.0.1"
+
+
+def test_terminal_provisions_a_tag():
+    """TAG 側にも MODE=0 と無線設定とアドレスを書き込む必要がある."""
+    fake = FakeTagModule()
+    cfg = Ryuw122Config(network_id="MYROOM01", address="TAG00001",
+                        password="F" * 32, channel=9, bandwidth=1)
+    t = ul.Ryuw122Terminal(fake)
+    assert t.provision(cfg, as_anchor=False) is True
+
+    # 仕様書 2 節: AT+MODE を最初に送る
+    assert fake.received[0] == "AT+MODE=0"
+    assert fake.settings["MODE"] == "0"
+    assert fake.settings["ADDRESS"] == "TAG00001"
+    assert fake.settings["NETWORKID"] == "MYROOM01"
+    assert fake.settings["CHANNEL"] == "9"
+    assert fake.settings["BANDWIDTH"] == "1"
+
+
+def test_config_for_tag_keeps_the_radio_settings_and_swaps_the_address():
+    """アドレスだけ機体ごとに変える, というのが正しい配り方."""
+    anchor_cfg = Ryuw122Config(network_id="MYROOM01", address="ANCHOR01",
+                               password="F" * 32, channel=9, bandwidth=1)
+    tag_cfg = anchor_cfg.for_tag("TAG00003")
+    assert tag_cfg.address == "TAG00003"
+    for name in ("network_id", "password", "channel", "bandwidth"):
+        assert getattr(tag_cfg, name) == getattr(anchor_cfg, name)
+    assert tag_cfg.commands(as_anchor=False)[0] == "AT+MODE=0"
+
+
+def test_config_rejects_an_out_of_range_duty_cycle():
+    with pytest.raises(ValueError, match="10〜28000"):
+        Ryuw122Config(duty_cycle=(5, 1000))
+    assert "AT+TAGD=1000,1000" in Ryuw122Config(
+        duty_cycle=(1000, 1000)).commands(as_anchor=False)
+    # デューティは TAG 側だけの設定なので ANCHOR には流さない
+    assert not [c for c in Ryuw122Config(duty_cycle=(1000, 1000)).commands(
+        as_anchor=True) if c.startswith("AT+TAGD")]
+
+
+def test_tag_keeps_data_staged_so_the_anchor_can_range():
+    """AT+TAG_SEND を積み続けていないと距離が出ない (仕様書 14 節).
+
+    ANCHOR が読むたびに TAG のバッファは空になる。読まれたら次を積む、
+    が成立していることを確かめる。
+    """
+    fake = FakeTagModule()
+    tag = ul.Ryuw122Tag(fake, config=Ryuw122Config(address="TAG00001"),
+                        payload="RNGE", refill=0.05)
+    tag.open()
+    try:
+        for _ in range(5):
+            deadline = time.monotonic() + 1.0
+            while fake.staged is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert fake.staged == "RNGE", "TAG がデータを積んでいない"
+            assert fake.consume() == "RNGE"      # ANCHOR が読んだ
+    finally:
+        tag.close()
+    assert tag.n_rcv >= 5                        # +TAG_RCV を数えている
+    assert fake.settings["MODE"] == "0"
+
+
+def test_tag_payload_length_matches_the_anchor_default():
+    """ANCHOR と TAG のペイロード長の差は 3 バイト以内 (仕様書 13 節).
+
+    どちらも既定のまま使う分には気にしなくてよい, を守れているか.
+    """
+    anchor_payload = Ryuw122Hal(FakeModule({}), ["TAG00001"]).payload
+    tag_payload = ul.Ryuw122Tag(FakeTagModule(), setup=False).payload
+    assert abs(len(anchor_payload) - len(tag_payload)) <= 3
+
+
+def test_tag_reports_never_being_read():
+    """ANCHOR から一度も呼ばれなければ n_rcv は 0 のまま (切り分け用)."""
+    fake = FakeTagModule()
+    tag = ul.Ryuw122Tag(fake, payload="RNGE", refill=0.02, setup=False)
+    tag.open()
+    time.sleep(0.15)
+    tag.close()
+    assert tag.n_sent >= 2                       # 積み直しは続いている
+    assert tag.n_rcv == 0                        # でも読まれてはいない

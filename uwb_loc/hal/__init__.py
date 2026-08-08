@@ -8,7 +8,10 @@
 * :class:`~uwb_loc.hal.push.PushHal` — **読みに行けない経路**用.
   BLE 通知や MQTT のように「届いたら呼ばれる」形は, こちらに押し込む
 * :class:`~uwb_loc.hal.ryuw122.Ryuw122Hal` — **REYAX RYUW122 専用**.
-  AT コマンドで設定し, TAG を順に呼んで測距する
+  AT コマンドで設定し, TAG を順に呼んで測距する.
+  TAG 側の設定は :class:`~uwb_loc.hal.ryuw122.Ryuw122Terminal`,
+  ``AT+TAG_SEND`` を積み続ける役目は
+  :class:`~uwb_loc.hal.ryuw122.Ryuw122Tag`
 * :class:`~uwb_loc.sim.SimulatedHal` — 実機なしで動かす模擬 HAL
 """
 
@@ -17,9 +20,9 @@ from __future__ import annotations
 from .base import UwbHal
 from .jsonl import JsonLinesHal, JsonLinesWriter, parse_line
 from .push import PushHal
-from .ryuw122 import Ryuw122Config, Ryuw122Hal
+from .ryuw122 import Ryuw122Config, Ryuw122Hal, Ryuw122Tag, Ryuw122Terminal
 from .text import TextHal, sniff
 
 __all__ = ["UwbHal", "TextHal", "PushHal", "sniff",
-           "Ryuw122Hal", "Ryuw122Config",
+           "Ryuw122Hal", "Ryuw122Config", "Ryuw122Terminal", "Ryuw122Tag",
            "JsonLinesHal", "JsonLinesWriter", "parse_line"]

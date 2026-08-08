@@ -6,6 +6,8 @@
     python -m uwb_loc gdop --room 8 6 2.6
     python -m uwb_loc sniff --serial /dev/ttyUSB0   # 実機の出力を覗いて解釈できるか見る
     python -m uwb_loc survey dist.csv        # 相互測距からアンカー配置を推定
+    python -m uwb_loc ryuw122 info --serial /dev/ttyUSB0     # RYUW122 の設定を読む
+    python -m uwb_loc ryuw122 tag-setup --serial /dev/ttyUSB1 --address TAG00001
 """
 
 from __future__ import annotations
@@ -265,6 +267,83 @@ def cmd_sniff(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- ryuw122
+
+
+def _ryuw122_config(args: argparse.Namespace, address: str | None) -> Any:
+    from .hal.ryuw122 import Ryuw122Config
+
+    return Ryuw122Config(
+        network_id=args.network_id,
+        address=address,
+        password=args.cpin,
+        channel=args.channel,
+        bandwidth=args.bandwidth,
+        power=args.power,
+        calibration_cm=args.cal,
+    )
+
+
+def cmd_ryuw122(args: argparse.Namespace) -> int:
+    """RYUW122 を 1 台ずつ設定する / 今の設定を読む / TAG として動かす.
+
+    測位そのものは ``ui`` か Python API がやる。ここは **その前の準備**、
+    つまり「並べる前に 1 台ずつ設定を入れる」ための道具。
+    設定は Flash に残るので、一度書けば次から要らない。
+    """
+    import time
+
+    from .hal.ryuw122 import Ryuw122Tag, Ryuw122Terminal
+
+    if args.action == "tag":
+        if not args.address:
+            print("TAG として動かすには --address が要ります"
+                  " (機体ごとに違う 8 バイト ASCII)", file=sys.stderr)
+            return 2
+        tag = Ryuw122Tag.from_serial(args.serial, args.baud,
+                                     config=_ryuw122_config(args, args.address),
+                                     payload=args.payload)
+        tag.open()
+        for line in tag.setup_log:
+            print(f"  {line}")
+        if tag.last_error:
+            print(f"警告: {tag.last_error}", file=sys.stderr)
+        print(f"\nTAG {args.address} として AT+TAG_SEND を積み続けます。Ctrl-C で終了。")
+        try:
+            last = -1
+            while True:
+                time.sleep(1.0)
+                if tag.n_rcv != last:
+                    last = tag.n_rcv
+                    print(f"  積んだ {tag.n_sent} 回 / 読まれた {tag.n_rcv} 回")
+        except KeyboardInterrupt:
+            pass
+        finally:
+            tag.close()
+        if tag.n_rcv == 0:
+            print("\n一度も読まれていません。ANCHOR 側の NETWORKID / CPIN /"
+                  " CHANNEL / BANDWIDTH と、呼んでいるアドレスを確かめてください。")
+            return 1
+        return 0
+
+    with Ryuw122Terminal.from_serial(args.serial, args.baud) as t:
+        if args.action == "info":
+            for name, value in t.info().items():
+                print(f"  {name:<11} {value if value is not None else '(応答なし)'}")
+            return 0
+
+        as_anchor = args.action == "anchor"
+        ok = t.provision(_ryuw122_config(args, args.address), as_anchor=as_anchor)
+        for line in t.log:
+            print(f"  {line}")
+        print()
+        if not ok:
+            print("いくつかのコマンドが +OK を返しませんでした。", file=sys.stderr)
+            return 1
+        print(f"{'ANCHOR' if as_anchor else 'TAG'} として設定しました (Flash に保存済み)。")
+        return 0
+
+
 # --------------------------------------------------------------------------- ui
 
 
@@ -342,6 +421,23 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--prefix", default="", help="アンカー ID の接頭辞 (例 A)")
     sp.add_argument("--lines", type=int, default=40, help="読む行数")
     sp.set_defaults(func=cmd_sniff)
+
+    sp = sub.add_parser("ryuw122", help="REYAX RYUW122 を 1 台ずつ設定する")
+    sp.add_argument("action", choices=("info", "anchor", "tag-setup", "tag"),
+                    help="info: 今の設定を読む / anchor: ANCHOR に設定 / "
+                         "tag-setup: TAG に設定 / tag: TAG に設定して動かし続ける")
+    sp.add_argument("--serial", required=True, help="シリアルポート (例 /dev/ttyUSB0)")
+    sp.add_argument("--baud", type=int, default=115200)
+    sp.add_argument("--address", help="この機体のアドレス (8 バイト ASCII, 機体ごとに変える)")
+    sp.add_argument("--network-id", help="NETWORKID (8 バイト ASCII, 全機で同じ)")
+    sp.add_argument("--cpin", help="AES128 パスワード (32 文字, 全機で同じ)")
+    sp.add_argument("--channel", type=int, choices=(5, 9))
+    sp.add_argument("--bandwidth", type=int, choices=(0, 1))
+    sp.add_argument("--power", type=int, choices=range(6))
+    sp.add_argument("--cal", type=int, help="AT+CAL 距離校正 [cm], -100〜100")
+    sp.add_argument("--payload", default="RNGE",
+                    help="TAG が積むデータ (ANCHOR 側と 3 バイト以内の差にする)")
+    sp.set_defaults(func=cmd_ryuw122)
 
     sp = sub.add_parser("ui", help="ブラウザ UI を起動する")
     sp.add_argument("--host", default="127.0.0.1")
