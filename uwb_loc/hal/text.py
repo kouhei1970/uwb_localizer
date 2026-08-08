@@ -344,8 +344,11 @@ def sniff(stream: IO[str], pattern: str | None = None, *, n: int = 40,
         pattern = best[1] if best[0] else GUESSES[0]
     hits, ms = try_pattern(pattern)
 
+    # JSON Lines を渡されたら、正規表現で読もうとせず JsonLinesHal を勧める。
+    json_like = sum(1 for ln in lines if ln.lstrip()[:1] == "{")
     dists = [m.value for m in ms]
     return {
+        "looks_like_json": json_like > max(len(lines) // 2, 1),
         "lines": len(lines),
         "matched": hits,
         "pattern": pattern,

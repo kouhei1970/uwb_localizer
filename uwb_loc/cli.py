@@ -104,7 +104,19 @@ def cmd_sim(args: argparse.Namespace) -> int:
 
 
 def cmd_replay(args: argparse.Namespace) -> int:
-    hal = JsonLinesHal.from_path(args.path, anchors=_load_anchors(args.anchors) or [])
+    """記録したログを測位し直す (JSON Lines / テキストのどちらでも)."""
+    given = _load_anchors(args.anchors) or []
+    if args.format == "text":
+        # 時刻を持たないテキストログは、一定レートとみなして時刻を合成する。
+        # そうしないと全観測が同時刻になり Lv3 の予測が止まる。
+        hal = TextHal.from_path(
+            args.path,
+            args.pattern or r"(?P<anchor>[A-Za-z]*\d+)\s*[:=,]\s*(?P<dist>-?[\d.]+)",
+            anchors=given, unit=args.unit, anchor_prefix=args.prefix,
+            rate_hz=args.rate,
+        )
+    else:
+        hal = JsonLinesHal.from_path(args.path, anchors=given)
     hal.open()
     batches = []
     while hal.is_open:
@@ -118,6 +130,18 @@ def cmd_replay(args: argparse.Namespace) -> int:
     if not anchors:
         print("アンカー座標が分かりません。--anchors を指定するか、"
               "ログに anchors メッセージを入れてください。", file=sys.stderr)
+        return 2
+
+    matched = getattr(hal, "n_matched", None)
+    if matched is not None:
+        print(f"解釈できた行 {matched} / 捨てた行 {hal.n_unmatched}")
+        if matched == 0:
+            print("  測距として解釈できませんでした。--pattern を見直すか、"
+                  "sniff で確かめてください。", file=sys.stderr)
+            return 2
+    if not batches:
+        print("観測が 1 つも読めませんでした。--format の指定を確認してください。",
+              file=sys.stderr)
         return 2
     print(f"{len(batches)} エポック / アンカー {len(anchors)} 台")
 
@@ -207,6 +231,10 @@ def cmd_sniff(args: argparse.Namespace) -> int:
     r = sniff(stream, args.pattern, n=args.lines, unit=args.unit,
               anchor_prefix=args.prefix)
 
+    if r.get("looks_like_json"):
+        print("この出力は JSON Lines のようです。正規表現は要りません。")
+        print("  UI なら形式に「JSON Lines」を、CLI なら --format jsonl を選んでください。")
+        print()
     print(f"読んだ行  {r['lines']}")
     print(f"解釈できた行  {r['matched']}")
     print(f"使った正規表現  {r['pattern']}")
@@ -283,6 +311,13 @@ def main(argv: list[str] | None = None) -> int:
     common(sp)
     sp.add_argument("path")
     sp.add_argument("--level", default="Lv2")
+    sp.add_argument("--format", default="jsonl", choices=("jsonl", "text"),
+                    help="ログの形式 (既定 jsonl)")
+    sp.add_argument("--pattern", help="text のときの正規表現 (省略時は汎用パターン)")
+    sp.add_argument("--unit", default="m", choices=("m", "cm", "mm"))
+    sp.add_argument("--prefix", default="", help="アンカー ID の接頭辞 (例 A)")
+    sp.add_argument("--rate", type=float, default=10.0,
+                    help="text のとき時刻を合成するレート [Hz]")
     sp.add_argument("--out", help="結果を CSV で書き出す")
     sp.set_defaults(func=cmd_replay)
 

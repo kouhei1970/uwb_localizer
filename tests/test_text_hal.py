@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import io
+import json
 import time
 
 import numpy as np
@@ -174,3 +175,59 @@ def test_sniff_reports_nothing_matched_for_unparseable():
     r = sniff(io.StringIO("hello\nworld\n"))
     assert r["matched"] == 0
     assert r["anchors"] == []
+
+
+# ------------------------------------------------- JSON Lines 前提を残さない
+
+def test_sniff_flags_json_lines_instead_of_guessing_a_regex():
+    """JSON Lines を渡されたら、正規表現をひねり出さずにそう教える."""
+    text = "".join(
+        '{"t":%.1f,"meas":[{"a":"A0","d":3.2},{"a":"A1","d":2.9}]}\n' % (i * 0.1)
+        for i in range(10))
+    r = sniff(io.StringIO(text))
+    assert r["looks_like_json"] is True
+
+    plain = "".join(f"A{i}: 3.2 m\n" for i in range(10))
+    assert sniff(io.StringIO(plain))["looks_like_json"] is False
+
+
+def test_replay_reads_both_formats(tmp_path):
+    """CLI の replay が JSON Lines とテキストの両方を読めること."""
+    from uwb_loc.cli import main
+
+    anchors = ul.room_anchors((8.0, 6.0, 2.6))
+    sim = ul.SimulatedHal(anchors, ul.trajectory.circle([4, 3, 1.2], 2.0),
+                          ul.ErrorModel(nlos_prob=0.05), rate_hz=10, seed=3)
+    _, _, batches = sim.generate(6.0)
+
+    apath = tmp_path / "anchors.json"
+    apath.write_text(json.dumps({"anchors": [a.to_dict() for a in anchors]}),
+                     encoding="utf-8")
+
+    jsonl = tmp_path / "log.jsonl"
+    with ul.JsonLinesWriter(str(jsonl), anchors) as w:
+        for b in batches:
+            w.write(b)
+    assert main(["replay", str(jsonl), "--level", "Lv2"]) == 0
+
+    text = tmp_path / "log.txt"
+    text.write_text("".join(f"range,{m.anchor_id[1:]},{int(m.value * 1000)}\n"
+                            for b in batches for m in b.measurements), encoding="utf-8")
+    assert main(["replay", str(text), "--format", "text",
+                 "--pattern", r"range,(?P<anchor>\d+),(?P<dist>\d+)",
+                 "--unit", "mm", "--prefix", "A",
+                 "--anchors", str(apath), "--level", "Lv3"]) == 0
+
+
+def test_replay_text_with_wrong_pattern_fails_loudly(tmp_path):
+    """解釈できないまま「成功」と言わないこと."""
+    from uwb_loc.cli import main
+
+    log = tmp_path / "log.txt"
+    log.write_text("A0: 3.2 m\nA1: 2.9 m\n", encoding="utf-8")
+    apath = tmp_path / "anchors.json"
+    apath.write_text(json.dumps({"anchors": [
+        ul.Anchor("A0", [0, 0, 2.4]).to_dict()]}), encoding="utf-8")
+    assert main(["replay", str(log), "--format", "text",
+                 "--pattern", r"NOPE(?P<anchor>x)(?P<dist>y)",
+                 "--anchors", str(apath)]) == 2
