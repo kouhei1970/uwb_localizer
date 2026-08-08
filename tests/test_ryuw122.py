@@ -429,3 +429,18 @@ def test_tag_reports_never_being_read():
     tag.close()
     assert tag.n_sent >= 2                       # 積み直しは続いている
     assert tag.n_rcv == 0                        # でも読まれてはいない
+
+
+def test_tag_side_output_carries_no_distance():
+    """仕様書 17 節: +TAG_RCV は <長さ>,<データ>,<RSSI> だけ.
+
+    距離も送信元アドレスも含まれない。つまり **TAG に繋いだホストは
+    距離を受け取れない**。この非対称が「移動側を ANCHOR にする」という
+    構成を決めている。ここが崩れたら HAL の前提が変わるので固定しておく。
+    """
+    # RSSI の有無にかかわらず、TAG 側の行からは距離を取り出せない
+    assert parse_anchor_rcv("+TAG_RCV=4,TEST") is None
+    assert parse_anchor_rcv("+TAG_RCV=4,TEST,-72") is None
+    # 一方 ANCHOR 側は同じ往復から距離が出る
+    got = parse_anchor_rcv("+ANCHOR_RCV=DAVID123,4,TEST,152 cm,-72")
+    assert got is not None and got[1] == pytest.approx(1.52)
