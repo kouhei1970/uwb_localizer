@@ -28,6 +28,7 @@ import numpy as np
 
 from ..geometry import anchor_condition, crlb_at, gdop_map
 from ..hal.jsonl import JsonLinesHal
+from ..hal.ryuw122 import Ryuw122Config, Ryuw122Hal
 from ..hal.text import TextHal
 from ..metrics import error_cdf, error_series, error_stats
 from ..sim import ErrorModel, SimulatedHal, make_anchors, room_anchors, trajectory
@@ -246,6 +247,24 @@ class LiveSession:
         pattern = req.get("pattern") or r"(?P<anchor>[A-Za-z]*\d+)\s*[:=,]\s*(?P<dist>-?[\d.]+)"
 
         def build_hal():
+            if source == "ryuw122":
+                # TAG アドレス = アンカーの ID。別々に入力させると必ずずれるので
+                # 1 箇所にまとめてある (アンカー一覧の ID をそのまま呼ぶ)。
+                tags = [a.id for a in anchors if a.enabled]
+                cfg = Ryuw122Config(
+                    network_id=req.get("network_id") or None,
+                    address=req.get("self_address") or None,
+                    password=req.get("password") or None,
+                    channel=int(req["channel"]) if req.get("channel") else None,
+                    bandwidth=int(req["bandwidth"]) if req.get("bandwidth") not in (None, "") else None,
+                    calibration_cm=int(req["cal_cm"]) if req.get("cal_cm") not in (None, "") else None,
+                )
+                return Ryuw122Hal.from_serial(
+                    req["port"], tags, int(req.get("baud", 115200)),
+                    anchors=anchors, config=cfg,
+                    payload=req.get("payload") or "RNGE",
+                    timeout=float(req.get("range_timeout", 0.35)),
+                )
             if source == "file":
                 return (TextHal.from_path(req["path"], pattern, **text_kw)
                         if fmt == "text"
@@ -333,6 +352,10 @@ class LiveSession:
                 "matched": getattr(hal, "n_matched", None),
                 "unmatched": getattr(hal, "n_unmatched", None),
                 "anchors_known": len(hal.anchors) if hal is not None else 0,
+                "setup_log": list(getattr(hal, "setup_log", []) or []),
+                "n_ranged": getattr(hal, "n_ranged", None),
+                "n_timeout": getattr(hal, "n_timeout", None),
+                "last_error": getattr(hal, "last_error", None),
             }
 
 

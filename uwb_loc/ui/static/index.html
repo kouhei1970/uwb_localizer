@@ -221,6 +221,7 @@ th{color:var(--dim);font-weight:500;font-size:11px}
       <label>ソース</label>
       <select id="liveSource">
         <option value="sim">模擬 (ハードなし)</option>
+        <option value="ryuw122">RYUW122 (シリアル)</option>
         <option value="file">ファイル</option>
         <option value="tcp">TCP</option>
         <option value="serial">シリアル</option>
@@ -251,6 +252,24 @@ th{color:var(--dim);font-weight:500;font-size:11px}
     <div class="row" id="liveFileRow"><label>パス</label><input type="text" id="livePath" style="width:260px" placeholder="/path/to/log.jsonl または .txt"></div>
     <div class="row" id="liveTcpRow"><label>ホスト / ポート</label><input type="text" id="liveHost" value="127.0.0.1" style="width:120px"><input type="number" id="livePort" value="9000"></div>
     <div class="row" id="liveSerRow"><label>ポート / ボーレート</label><input type="text" id="liveSer" value="/dev/ttyUSB0" style="width:130px"><input type="number" id="liveBaud" value="115200"></div>
+    <div id="liveRyuwRows">
+      <div class="row"><label>ポート / ボーレート</label>
+        <input type="text" id="ryPort" value="/dev/ttyUSB0" style="width:130px">
+        <input type="number" id="ryBaud" value="115200"></div>
+      <div class="row"><label>NETWORKID / 自局 ADDRESS</label>
+        <input type="text" id="ryNet" placeholder="REYAX123" maxlength="8" style="width:88px">
+        <input type="text" id="ryAddr" placeholder="ANCHOR01" maxlength="8" style="width:88px"></div>
+      <div class="row"><label>CPIN (32 文字, 空欄可)</label>
+        <input type="text" id="ryPin" maxlength="32" style="width:240px" placeholder="全機で揃える"></div>
+      <div class="row"><label>CHANNEL / BANDWIDTH / CAL [cm]</label>
+        <select id="ryCh"><option value="">既定</option><option value="5">5</option><option value="9">9</option></select>
+        <select id="ryBw"><option value="">既定</option><option value="0">0</option><option value="1">1</option></select>
+        <input type="number" id="ryCal" placeholder="0" style="width:60px"></div>
+      <div class="note">この機体を <b>ANCHOR</b> にして、上のアンカー一覧の <b>ID を TAG
+        アドレスとして順に呼びます</b>。ID は 8 バイト ASCII で、固定側 TAG の
+        <code>AT+ADDRESS</code> と一致させてください。TAG 側は
+        <code>AT+TAG_SEND</code> を定期的に打っている必要があります。</div>
+    </div>
     <div class="row"><button class="primary" id="liveStart">開始</button><button id="liveStop">停止</button>
       <span class="pill" id="liveStat">停止中</span></div>
   </div>
@@ -329,7 +348,11 @@ function renderAnchors(){
   const box = $("#anchorList"); box.innerHTML = "";
   anchors.forEach((a,i)=>{
     const d = document.createElement("div"); d.className = "row";
-    d.innerHTML = `<label style="flex:0 0 34px">${a.id}</label>`;
+    const idIn = document.createElement("input");
+    idIn.type = "text"; idIn.value = a.id; idIn.title = "アンカー ID (RYUW122 なら TAG アドレス)";
+    idIn.style.cssText = "width:74px;padding:2px 4px";
+    idIn.oninput = ()=>{ a.id = idIn.value; };
+    d.appendChild(idIn);
     [0,1,2].forEach(k=>{
       const inp = document.createElement("input");
       inp.type="number"; inp.step="0.1"; inp.value=a.p[k].toFixed(2);
@@ -699,15 +722,18 @@ $$(".tab").forEach(t=>t.onclick=()=>{
 /* ---------------------------------------------------------------- ライブ */
 let liveRows = [], liveSince = 0, liveTimer = null;
 function liveSourceUI(){
-  const s = $("#liveSource").value, sim = s === "sim";
+  const s = $("#liveSource").value, sim = s === "sim", ry = s === "ryuw122";
+  $("#liveRyuwRows").classList.toggle("hidden", !ry);
   $("#liveFileRow").classList.toggle("hidden", s!=="file");
   $("#liveTcpRow").classList.toggle("hidden", s!=="tcp");
   $("#liveSerRow").classList.toggle("hidden", s!=="serial");
   // 模擬ソースには形式も正規表現も関係ない
-  $("#liveFmtRow").classList.toggle("hidden", sim);
-  const text = !sim && $("#liveFormat").value === "text";
+  $("#liveFmtRow").classList.toggle("hidden", sim || ry);
+  const text = !sim && !ry && $("#liveFormat").value === "text";
   $("#livePatRow").classList.toggle("hidden", !text);
-  $("#liveRateRow").classList.toggle("hidden", sim);
+  $("#liveRateRow").classList.toggle("hidden", sim || ry);
+  $("#liveFileRow").classList.toggle("hidden", s!=="file");
+  $("#liveSerRow").classList.toggle("hidden", s!=="serial");
 }
 $("#liveSource").onchange = liveSourceUI;
 $("#liveFormat").onchange = liveSourceUI;
@@ -723,6 +749,14 @@ $("#liveStart").onclick = async ()=>{
     baud:+$("#liveBaud").value
   });
   if(body.source==="serial") body.port = $("#liveSer").value;
+  if(body.source==="ryuw122"){
+    Object.assign(body, {
+      port:$("#ryPort").value, baud:+$("#ryBaud").value,
+      network_id:$("#ryNet").value, self_address:$("#ryAddr").value,
+      password:$("#ryPin").value, channel:$("#ryCh").value,
+      bandwidth:$("#ryBw").value, cal_cm:$("#ryCal").value,
+    });
+  }
   liveRows = []; liveSince = 0;
   const r = await fetch("/api/live/start",{method:"POST",
     headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -751,6 +785,11 @@ async function pollLive(){
     stat += "  ※ 正規表現が当たっていません";
   if(j.n === 0 && j.anchors_known === 0)
     stat += "  ※ アンカー座標がありません";
+  if(j.n_ranged !== null && j.n_ranged !== undefined)
+    stat += ` — 測距 ${j.n_ranged} 回 / 応答なし ${j.n_timeout} 回`;
+  if(j.last_error) stat += `  ※ ${j.last_error}`;
+  if(j.n_ranged === 0 && j.n_timeout > 0)
+    stat += "  ※ TAG から応答がありません (アドレス・NETWORKID・CPIN を確認)";
   $("#liveStat").textContent = stat;
   drawLive();
 }

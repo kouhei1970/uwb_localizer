@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# JsonLinesHal.from_serial を使うときだけ必要 (ファイル/TCP なら不要).
+# シリアル接続 (RYUW122 や JsonLinesHal.from_serial) に必要.
 serial = ["pyserial>=3.5"]
 dev = ["pytest>=7.0"]
 
