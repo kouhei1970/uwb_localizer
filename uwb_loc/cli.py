@@ -253,7 +253,15 @@ def cmd_survey(args: argparse.Namespace) -> int:
         print("      A1,4.12,0   ,4.55", file=sys.stderr)
         print("      A2,6.03,4.55,0", file=sys.stderr)
         return 2
-    anchors = self_survey(dmat, ids, dim=args.dim)
+    try:
+        anchors = self_survey(dmat, ids, dim=args.dim)
+    except ValueError as e:
+        print(f"配置を復元できませんでした: {e}", file=sys.stderr)
+        if len(dmat) <= args.dim:
+            print(f"  --dim {args.dim} で解くには最低 {args.dim + 1} 台の相互測距が要ります "
+                  f"(渡されたのは {len(dmat)} 台)。高さが分かっているなら --dim 2 で 3 台から解けます。",
+                  file=sys.stderr)
+        return 2
     print(json.dumps({"anchors": [a.to_dict() for a in anchors]}, ensure_ascii=False, indent=2))
     return 0
 

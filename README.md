@@ -251,11 +251,14 @@ python -m uwb_loc ryuw122 tag --serial /dev/ttyUSB1 --address TAG00001 \
 ペアは空欄でよい**。
 
 ```
-      ,TAG00001,TAG00002,TAG00003
-TAG00001,0     ,4.12    ,6.03
-TAG00002,4.12  ,0       ,4.55
-TAG00003,6.03  ,4.55    ,0
+        ,TAG00001,TAG00002,TAG00003,TAG00004
+TAG00001,0       ,7.60    ,9.62    ,5.60
+TAG00002,7.60    ,0       ,6.03    ,9.62
+TAG00003,9.62    ,6.03    ,0       ,7.60
+TAG00004,5.60    ,9.62    ,7.60    ,0
 ```
+
+**3D なら最低 4 台分**必要 (`--dim 2` なら 3 台)。
 
 ```bash
 python -m uwb_loc survey distances.csv --dim 3     # → アンカー座標の JSON
