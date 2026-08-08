@@ -28,6 +28,7 @@ import numpy as np
 
 from ..geometry import anchor_condition, crlb_at, gdop_map
 from ..hal.jsonl import JsonLinesHal
+from ..hal.text import TextHal
 from ..metrics import error_cdf, error_series, error_stats
 from ..sim import ErrorModel, SimulatedHal, make_anchors, room_anchors, trajectory
 from ..solvers import LEVELS, SolveConfig, make_estimator
@@ -42,8 +43,16 @@ _STATIC = Path(__file__).parent / "static"
 
 
 def _anchors_from(req: dict[str, Any]) -> list[Anchor]:
-    if req.get("anchors"):
-        return [Anchor.from_dict(a) for a in req["anchors"]]
+    """要求からアンカー一覧を取り出す.
+
+    ``anchors`` が**あれば**それを使う — 空リストなら空のまま返す.
+    「アンカーを全部消した」を「既定の部屋を使え」と読み替えてしまうと,
+    実機のライブ表示で**座標が無いのにもっともらしい位置が出る**という
+    最悪の挙動になる (捏造した配置で解いてしまう).
+    キー自体が無いときだけ, 既定の部屋を組む.
+    """
+    if "anchors" in req:
+        return [Anchor.from_dict(a) for a in (req["anchors"] or [])]
     room = req.get("room", [8.0, 6.0, 2.6])
     return room_anchors(tuple(room), n_low=int(req.get("n_low", 4)))
 
@@ -208,6 +217,7 @@ class LiveSession:
         self.total = 0
         self.error: str | None = None
         self.source = ""
+        self._hal: Any = None
 
     def start(self, req: dict[str, Any]) -> None:
         self.stop()
@@ -223,15 +233,33 @@ class LiveSession:
         source = req.get("source", "sim")
         self.source = source
 
+        # 経路 (source) と 形式 (fmt) は独立に選べる.
+        # 形式が "text" ならファームの出力を正規表現で読む (JSON でなくてよい).
+        fmt = req.get("format", "jsonl")
+        text_kw = dict(
+            anchors=anchors,
+            unit=req.get("unit", "m"),
+            anchor_prefix=req.get("prefix", ""),
+        )
+        if req.get("assume_rate"):
+            text_kw["rate_hz"] = float(req.get("rate", 10.0))
+        pattern = req.get("pattern") or r"(?P<anchor>[A-Za-z]*\d+)\s*[:=,]\s*(?P<dist>-?[\d.]+)"
+
         def build_hal():
             if source == "file":
-                return JsonLinesHal.from_path(req["path"], anchors=anchors)
+                return (TextHal.from_path(req["path"], pattern, **text_kw)
+                        if fmt == "text"
+                        else JsonLinesHal.from_path(req["path"], anchors=anchors))
             if source == "tcp":
-                return JsonLinesHal.from_tcp(req["host"], int(req["port"]), anchors=anchors)
+                host, port = req["host"], int(req["port"])
+                return (TextHal.from_tcp(host, port, pattern, **text_kw)
+                        if fmt == "text"
+                        else JsonLinesHal.from_tcp(host, port, anchors=anchors))
             if source == "serial":
-                return JsonLinesHal.from_serial(
-                    req["port"], int(req.get("baud", 115200)), anchors=anchors
-                )
+                port, baud = req["port"], int(req.get("baud", 115200))
+                return (TextHal.from_serial(port, baud, pattern, **text_kw)
+                        if fmt == "text"
+                        else JsonLinesHal.from_serial(port, baud, anchors=anchors))
             return SimulatedHal(
                 anchors,
                 _trajectory_from(req),
@@ -245,8 +273,13 @@ class LiveSession:
 
             try:
                 hal = build_hal()
+                self._hal = hal
                 hal.open()
                 use = hal.anchors or anchors
+                if not use:
+                    self.error = ("アンカー座標がありません。左パネルで配置するか、"
+                                  "観測源から anchors メッセージを送ってください。")
+                    return
                 est = make_estimator(level, use, config, **_estimator_kwargs(level, req))
                 realtime = source == "sim"
                 dt = 1.0 / float(req.get("rate", 10.0))
@@ -279,12 +312,18 @@ class LiveSession:
             start = max(self.total - len(self.fixes), 0)
             skip = max(since - start, 0)
             rows = list(self.fixes)[skip:]
+            hal = self._hal
             return {
                 "n": self.total,
                 "fixes": rows,
                 "running": self.thread is not None and self.thread.is_alive(),
                 "error": self.error,
                 "source": self.source,
+                # テキスト源で位置が出ないとき、行が読めていないのか
+                # 正規表現が当たっていないのかを切り分けるための数字
+                "matched": getattr(hal, "n_matched", None),
+                "unmatched": getattr(hal, "n_unmatched", None),
+                "anchors_known": len(hal.anchors) if hal is not None else 0,
             }
 
 

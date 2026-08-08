@@ -46,6 +46,7 @@ main{display:grid;grid-template-columns:290px 1fr;gap:12px;padding:12px;align-it
 .card h2{font-size:12px;margin:0 0 8px;color:var(--dim);font-weight:600;letter-spacing:.04em}
 .row{display:flex;align-items:center;gap:8px;margin:5px 0}
 .row label{flex:1;color:var(--dim);font-size:12px}
+.row label.inline{flex:0 0 auto;white-space:nowrap}
 input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line);
   color:var(--fg);border-radius:5px;padding:3px 6px;font-size:12px;width:74px;font-variant-numeric:tabular-nums}
 input[type=range]{width:110px;accent-color:var(--accent)}
@@ -215,19 +216,39 @@ th{color:var(--dim);font-weight:500;font-size:11px}
 <!-- ============================================================ 右: ライブ -->
 <div id="tab-live" class="hidden">
   <div class="card">
-    <div class="panel-title"><h3>観測源</h3><span class="hint">実機は JSON Lines で流し込む (docs/UWB_PROTOCOL.md)</span></div>
+    <div class="panel-title"><h3>観測源</h3><span class="hint">実機の出力をそのまま流し込む — テキスト (正規表現) か JSON Lines</span></div>
     <div class="row">
       <label>ソース</label>
       <select id="liveSource">
         <option value="sim">模擬 (ハードなし)</option>
-        <option value="file">ファイル (.jsonl)</option>
+        <option value="file">ファイル</option>
         <option value="tcp">TCP</option>
         <option value="serial">シリアル</option>
       </select>
-      <label style="flex:0">レベル</label>
+      <label class="inline">レベル</label>
       <select id="liveLevel"><option>Lv0</option><option>Lv1</option><option selected>Lv2</option><option>Lv3</option></select>
     </div>
-    <div class="row" id="liveFileRow"><label>パス</label><input type="text" id="livePath" style="width:260px" placeholder="/path/to/log.jsonl"></div>
+    <div class="row" id="liveFmtRow">
+      <label>形式</label>
+      <select id="liveFormat">
+        <option value="jsonl">JSON Lines</option>
+        <option value="text">テキスト (正規表現)</option>
+      </select>
+      <label class="inline">単位</label>
+      <select id="liveUnit"><option>m</option><option>cm</option><option>mm</option></select>
+      <label class="inline">ID 接頭辞</label>
+      <input type="text" id="livePrefix" style="width:44px" placeholder="A">
+    </div>
+    <div class="row" id="livePatRow">
+      <label>正規表現</label>
+      <input type="text" id="livePattern" style="width:320px"
+             placeholder="(?P<anchor>A\d+):\s*(?P<dist>[\d.]+)   空欄なら推測">
+    </div>
+    <div class="row" id="liveRateRow">
+      <label><input type="checkbox" id="liveAssumeRate"> 時刻が無いので一定レートとみなす</label>
+      <span class="pill">ログ再生で Lv3 を使うときに必要</span>
+    </div>
+    <div class="row" id="liveFileRow"><label>パス</label><input type="text" id="livePath" style="width:260px" placeholder="/path/to/log.jsonl または .txt"></div>
     <div class="row" id="liveTcpRow"><label>ホスト / ポート</label><input type="text" id="liveHost" value="127.0.0.1" style="width:120px"><input type="number" id="livePort" value="9000"></div>
     <div class="row" id="liveSerRow"><label>ポート / ボーレート</label><input type="text" id="liveSer" value="/dev/ttyUSB0" style="width:130px"><input type="number" id="liveBaud" value="115200"></div>
     <div class="row"><button class="primary" id="liveStart">開始</button><button id="liveStop">停止</button>
@@ -678,16 +699,26 @@ $$(".tab").forEach(t=>t.onclick=()=>{
 /* ---------------------------------------------------------------- ライブ */
 let liveRows = [], liveSince = 0, liveTimer = null;
 function liveSourceUI(){
-  const s = $("#liveSource").value;
+  const s = $("#liveSource").value, sim = s === "sim";
   $("#liveFileRow").classList.toggle("hidden", s!=="file");
   $("#liveTcpRow").classList.toggle("hidden", s!=="tcp");
   $("#liveSerRow").classList.toggle("hidden", s!=="serial");
+  // 模擬ソースには形式も正規表現も関係ない
+  $("#liveFmtRow").classList.toggle("hidden", sim);
+  const text = !sim && $("#liveFormat").value === "text";
+  $("#livePatRow").classList.toggle("hidden", !text);
+  $("#liveRateRow").classList.toggle("hidden", sim);
 }
-$("#liveSource").onchange = liveSourceUI; liveSourceUI();
+$("#liveSource").onchange = liveSourceUI;
+$("#liveFormat").onchange = liveSourceUI;
+liveSourceUI();
 
 $("#liveStart").onclick = async ()=>{
   const body = Object.assign(payload(), {
     source:$("#liveSource").value, level:$("#liveLevel").value,
+    format:$("#liveFormat").value, pattern:$("#livePattern").value,
+    unit:$("#liveUnit").value, prefix:$("#livePrefix").value,
+    assume_rate:$("#liveAssumeRate").checked,
     path:$("#livePath").value, host:$("#liveHost").value, port:+$("#livePort").value,
     baud:+$("#liveBaud").value
   });
@@ -712,7 +743,15 @@ async function pollLive(){
   if(j.error){ $("#liveStat").textContent = "エラー: "+j.error; clearInterval(liveTimer); return; }
   liveSince = j.n;
   liveRows = liveRows.concat(j.fixes).slice(-300);
-  if(!j.running) $("#liveStat").textContent = "停止 (源が尽きました)";
+  // 位置が出ないときの切り分け: 行は読めているか / 正規表現は当たっているか
+  let stat = j.running ? "実行中" : "停止 (源が尽きました)";
+  if(j.matched !== null && j.matched !== undefined)
+    stat += ` — 解釈 ${j.matched} 行 / 捨てた ${j.unmatched} 行`;
+  if(j.n === 0 && j.matched === 0 && j.unmatched > 0)
+    stat += "  ※ 正規表現が当たっていません";
+  if(j.n === 0 && j.anchors_known === 0)
+    stat += "  ※ アンカー座標がありません";
+  $("#liveStat").textContent = stat;
   drawLive();
 }
 function drawLive(){
