@@ -147,6 +147,43 @@ def test_display_math_uses_github_block_form():
     assert not bad, "GitHub で壊れる表示数式:\n  " + "\n  ".join(bad)
 
 
+#: GitHub の KaTeX が禁止しているコマンド。
+#: 使うとページに「The following macros are not allowed: ...」と出て、
+#: その数式が丸ごと表示されなくなる。マクロを定義できる系が中心。
+GITHUB_BANNED_MACROS = (
+    r"\def", r"\gdef", r"\edef", r"\xdef", r"\let", r"\futurelet",
+    r"\newcommand", r"\renewcommand", r"\providecommand",
+    r"\global", r"\operatorname", r"\includegraphics",
+)
+
+
+def test_no_macros_that_github_rejects():
+    """GitHub が弾くコマンドを使っていないか.
+
+    ``\operatorname`` は普通の KaTeX では通るが GitHub では通らない。
+    代わりに ``\mathrm`` を使う。
+    """
+    import re
+
+    bad = []
+    for md in sorted(ROOT.rglob("*.md")):
+        if ".git" in md.parts:
+            continue
+        in_code = False
+        for i, line in enumerate(md.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code or "$" not in line:
+                continue
+            for macro in GITHUB_BANNED_MACROS:
+                # \def などはそのままだと正規表現の \d と衝突するのでエスケープする
+                if re.search(re.escape(macro) + r"(?![a-zA-Z])", line):
+                    bad.append(f"{md.relative_to(ROOT)}:{i} {macro} — {line.strip()[:50]}")
+    assert not bad, ("GitHub が表示できないコマンド (\\mathrm などに置き換える):\n  "
+                     + "\n  ".join(bad))
+
+
 def test_inline_math_delimiters_are_balanced():
     """インライン数式の $ が閉じているか (奇数個だと以降が数式扱いになる)."""
     bad = []

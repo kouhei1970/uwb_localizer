@@ -56,11 +56,11 @@ $$
 $\Delta = p - a_i$、$\rho = \sqrt{\Delta_x^2+\Delta_y^2}$、$r^2 = \rho^2 + \Delta_z^2$ として
 
 $$
-h = \operatorname{atan2}(\Delta_y, \Delta_x), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_y}{\rho^2},\ \frac{\Delta_x}{\rho^2},\ 0\right)
+h = \mathrm{atan2}(\Delta_y, \Delta_x), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_y}{\rho^2},\ \frac{\Delta_x}{\rho^2},\ 0\right)
 $$
 
 $$
-h = \operatorname{atan2}(\Delta_z, \rho), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_z \Delta_x}{r^2\rho},\ -\frac{\Delta_z \Delta_y}{r^2\rho},\ \frac{\rho}{r^2}\right)
+h = \mathrm{atan2}(\Delta_z, \rho), \qquad \frac{\partial h}{\partial p} = \left(-\frac{\Delta_z \Delta_x}{r^2\rho},\ -\frac{\Delta_z \Delta_y}{r^2\rho},\ \frac{\rho}{r^2}\right)
 $$
 
 方位角のヤコビアンのノルムは $1/\rho$。つまり同じ角度誤差 $\sigma_\theta$ でも位置誤差は
@@ -205,7 +205,7 @@ $$
 
 実装 (`beck_gtrs`) は
 
-1. $\gamma_1 = \max\operatorname{eig}(G^{-1}D)$ から $\lambda_\text{lo} = -1/\gamma_1$
+1. $\gamma_1 = \max\mathrm{eig}(G^{-1}D)$ から $\lambda_\text{lo} = -1/\gamma_1$
 2. $\lambda_\text{lo}$ のわずか内側から始めて $\varphi > 0$ を確認
 3. $\varphi < 0$ になるまで上限を倍々に広げる
 4. 200 回の二分法
@@ -242,7 +242,7 @@ $$
 \boxed{\ (J^\top W J)\,\Delta = J^\top W e, \qquad p \leftarrow p + \Delta\ }
 $$
 
-$J$ の行は §1 のヤコビアン、$W = \operatorname{diag}(w_i)$。
+$J$ の行は §1 のヤコビアン、$W = \mathrm{diag}(w_i)$。
 
 ### Levenberg-Marquardt 減衰
 
@@ -255,7 +255,7 @@ $J^\top W J$ が特異に近づく状況が実際にある。
 そのまま解くと $\Delta$ が発散するので、減衰項を入れる。
 
 $$
-\left(J^\top W J + \lambda\,\frac{\operatorname{tr}(J^\top W J)}{n_\text{free}} I\right)\Delta = J^\top W e
+\left(J^\top W J + \lambda\,\frac{\mathrm{tr}(J^\top W J)}{n_\text{free}} I\right)\Delta = J^\top W e
 $$
 
 コストが下がったら $\lambda \leftarrow 0.3\lambda$、上がったら $\lambda \leftarrow 4\lambda$ で
@@ -267,7 +267,7 @@ $$
 最適点でのフィッシャー情報行列は $J^\top W J$ なので
 
 $$
-\operatorname{Cov}(\hat{p}) \approx (J^\top W J)^{-1}
+\mathrm{Cov}(\hat{p}) \approx (J^\top W J)^{-1}
 $$
 
 これを `Fix.covariance` として返す。運用時に「今の値を信じてよいか」を
@@ -497,8 +497,8 @@ $$
 \mathcal{F} = \sum_i \frac{1}{\sigma_i^2}\,u_i u_i^\top
 $$
 
-クラメール・ラオ下限は $\operatorname{Cov}(\hat{p}) \succeq \mathcal{F}^{-1}$。
-`crlb_at` は $\sqrt{\operatorname{tr}(\mathcal{F}^{-1})}$ を返す。
+クラメール・ラオ下限は $\mathrm{Cov}(\hat{p}) \succeq \mathcal{F}^{-1}$。
+`crlb_at` は $\sqrt{\mathrm{tr}(\mathcal{F}^{-1})}$ を返す。
 **どんなアルゴリズムを使ってもこれより良くはならない**ので、
 実測 RMSE と並べれば改善余地が分かる。
 
@@ -510,7 +510,7 @@ $$
 全 $\sigma_i$ を 1 とおいた (= 行を単位ベクトルに正規化した) ときの
 
 $$
-\text{GDOP} = \sqrt{\operatorname{tr}\bigl((H^\top H)^{-1}\bigr)}
+\text{GDOP} = \sqrt{\mathrm{tr}\bigl((H^\top H)^{-1}\bigr)}
 $$
 
 $\sigma_p \approx \text{GDOP} \times \sigma_\text{range}$ という読み方をする、

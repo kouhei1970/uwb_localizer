@@ -615,7 +615,7 @@ python examples/06_troubleshooting.py       # 壊れ方から原因を当てる
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q      # 174 件 (C 版の突き合わせを含む)
+python -m pytest -q      # 175 件 (C 版の突き合わせを含む)
 ```
 
 C 版もここで一緒に検証している (ビルド・単精度・Python 版との突き合わせ)。
