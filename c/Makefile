@@ -3,6 +3,7 @@
 #   make            静的ライブラリ libuwbloc.a を作る
 #   make test       テストを走らせる
 #   make examples   サンプルを作る
+#   make bench      ホスト上でマイクロベンチマークを走らせる (c/bench/)
 #   make float      float 版で作り直して試す (マイコン想定)
 #   make strict     -Wall -Wextra -Werror -pedantic で通るか見る
 #   make size       セクションごとのサイズを出す
@@ -20,8 +21,9 @@ OBJ  = $(SRC:.c=.o)
 LIB  = libuwbloc.a
 
 EXAMPLES = examples/01_snapshot examples/02_tracking examples/03_replay
+BENCH    = bench/bench_uwb
 
-.PHONY: all test examples float strict size clean
+.PHONY: all test examples bench bench-build float strict size clean
 
 all: $(LIB)
 
@@ -42,6 +44,16 @@ examples: $(EXAMPLES)
 examples/%: examples/%.c $(LIB)
 	$(CC) $(CFLAGS) $(WARN) $< $(LIB) $(LDLIBS) -o $@
 
+# ホスト (macOS/Linux) 上で主要関数を単体計測する。結果は表 + TSV
+# (bench/bench_result.tsv)。最適化の前後でここを見比べる。
+bench-build: $(BENCH)
+
+bench: $(BENCH)
+	./$(BENCH)
+
+$(BENCH): bench/bench_uwb.c $(LIB)
+	$(CC) $(CFLAGS) $(WARN) $< $(LIB) $(LDLIBS) -o $@
+
 # 単精度でも通るか。マイコンでは float の方が速い/小さいことが多い。
 # -Wconversion を外すのは、テストのアンカー座標が double リテラルで
 # 書いてあるため。ライブラリ本体は float でも無警告で通る。
@@ -50,12 +62,13 @@ float: clean
 	        WARN="-Wall -Wextra -pedantic -Wshadow" test
 
 # 警告をすべてエラーにして通す。移植先のコンパイラで詰まらないように。
+# bench はコンパイルだけ確かめる (実行はしない。時間がかかるので)。
 strict: clean
-	$(MAKE) WARN="-Wall -Wextra -Werror -pedantic -Wshadow -Wconversion -Wno-sign-conversion" test
+	$(MAKE) WARN="-Wall -Wextra -Werror -pedantic -Wshadow -Wconversion -Wno-sign-conversion" test bench-build
 
 # ROM/RAM の見積もり。マイコンに載るかの目安。
 size: $(LIB)
 	@size -t $(OBJ) 2>/dev/null || echo "size コマンドが無い"
 
 clean:
-	rm -f $(OBJ) $(LIB) tests/test_uwb tests/*.o $(EXAMPLES)
+	rm -f $(OBJ) $(LIB) tests/test_uwb tests/*.o $(EXAMPLES) $(BENCH)

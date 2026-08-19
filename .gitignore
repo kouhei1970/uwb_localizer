@@ -11,6 +11,7 @@ venv/
 results/
 *.jsonl
 *.csv
+*.tsv
 
 # ベンダのデータシートは再配布できないのでコミットしない (docs/datasheets/README.md)
 docs/datasheets/*.pdf
@@ -21,4 +22,6 @@ c/tests/test_uwb
 c/examples/01_snapshot
 c/examples/02_tracking
 c/examples/03_replay
+c/bench/bench_uwb
 c/**/*.su
+c/**/*.dSYM
