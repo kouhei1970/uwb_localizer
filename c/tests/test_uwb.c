@@ -11,6 +11,7 @@
  *   * 数値が壊れても NaN を返さず ok=0 で返る
  */
 #include "uwb_loc.h"
+#include "uwb_linalg.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -25,9 +26,16 @@ static int g_run = 0;
 #if UWB_REAL_IS_FLOAT
 #define TOL_EXACT  2e-4    /* 無雑音での位置一致 [m] */
 #define TOL_TIGHT  1e-5    /* 幾何的に厳密なはずの量 */
+/* 実測値 (4x4, make float): 残差最大 4.5e-6 / 直交性最大 3.5e-7。
+ * 余裕を持たせて一桁以上離す。 */
+#define TOL_EIGVEC 1e-4    /* Jacobi 固有ベクトルの残差 |A v - lambda v| */
+#define TOL_ORTHO  1e-5    /* 固有ベクトルの直交性 (V^T V の単位行列からのずれ) */
 #else
 #define TOL_EXACT  1e-6
 #define TOL_TIGHT  1e-9
+/* 実測値 (4x4, make test): 残差最大 4.0e-15 / 直交性最大 6.7e-16。 */
+#define TOL_EIGVEC 1e-9
+#define TOL_ORTHO  1e-9
 #endif
 
 #define CHECK(cond, ...)                                                       \
@@ -278,6 +286,56 @@ static void test_gdop_and_crlb(void)
     CHECK(crlb > 0 && crlb < 1.0, "CRLB が変 (%.3f)", (double)crlb);
 }
 
+static void test_sym_eig_vectors(void)
+{
+    /* 対称だが特別な構造のない 4x4。恒等行列だと固有ベクトルが何でも
+     * 通ってしまうので検証にならない。 */
+    uwb_real A[16] = {
+        4, 1, 0, 2,
+        1, 3, 1, 0,
+        0, 1, 5, 1,
+        2, 0, 1, 6
+    };
+    uwb_real orig[16];   /* uwb_sym_eig は a を破壊するので残しておく */
+    uwb_real work[16];
+    uwb_real eig[4];
+    uwb_real vec[16];
+    int i, j, k;
+
+    memcpy(orig, A, sizeof(A));
+    memcpy(work, A, sizeof(A));
+
+    CHECK(uwb_sym_eig(work, eig, vec, 4), "固有値・固有ベクトルが求まらない");
+
+    for (i = 1; i < 4; ++i)
+        CHECK(eig[i - 1] <= eig[i] + (uwb_real)TOL_TIGHT,
+              "固有値が昇順でない (%.6f > %.6f)", (double)eig[i - 1], (double)eig[i]);
+
+    /* 固有ベクトル残差 A v_i == eig_i v_i。元の (破壊されていない) 行列で確認する。
+     * vec[row*4+col] が固有ベクトル col の第 row 成分。 */
+    for (i = 0; i < 4; ++i) {
+        double res = 0.0;
+        for (j = 0; j < 4; ++j) {
+            double av = 0.0;
+            for (k = 0; k < 4; ++k) av += (double)orig[j * 4 + k] * (double)vec[k * 4 + i];
+            double diff = av - (double)eig[i] * (double)vec[j * 4 + i];
+            res += diff * diff;
+        }
+        res = sqrt(res);
+        CHECK(res < TOL_EIGVEC, "固有ベクトル残差が大きい (列 %d, %.3g)", i, res);
+    }
+
+    /* 直交性 V^T V == I */
+    for (i = 0; i < 4; ++i) {
+        for (j = 0; j < 4; ++j) {
+            double dot = 0.0, want = (i == j) ? 1.0 : 0.0;
+            for (k = 0; k < 4; ++k) dot += (double)vec[k * 4 + i] * (double)vec[k * 4 + j];
+            CHECK(fabs(dot - want) < TOL_ORTHO,
+                  "V^T V が単位行列でない (%d,%d)=%.3g", i, j, dot);
+        }
+    }
+}
+
 static void test_ekf_tracks_a_moving_tag(void)
 {
     uwb_config cfg;
@@ -461,6 +519,7 @@ int main(void)
     test_2d_mode();
     test_coplanar_is_detected();
     test_gdop_and_crlb();
+    test_sym_eig_vectors();
     test_ekf_tracks_a_moving_tag();
     test_ekf_bootstraps_from_one_range_at_a_time();
     test_ekf_recovers_from_gate_lockout();
