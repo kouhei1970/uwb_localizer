@@ -1,5 +1,12 @@
 # uwb_localizer
 
+> **このリポジトリは 2026-08-21 をもって凍結しました。** UWB 測位アルゴリズムを
+> 確立するために始めたプロジェクトで、その成果は
+> [kouhei1970/m5stamp_uwb_localizer](https://github.com/kouhei1970/m5stamp_uwb_localizer)
+> （M5Stamp UWB Module + ESP32-S3 向けの実装。`components/uwb_loc/` 等）に
+> すべて取り込まれ、以後の開発はそちらで行います。本リポジトリは参考・履歴として
+> 残します。
+
 UWB の**距離情報だけ**からタグの位置を割り出すライブラリ。
 
 はじめての方は **[チュートリアル](docs/TUTORIAL.md)** へ。

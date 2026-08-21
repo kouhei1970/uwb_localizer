@@ -1,5 +1,10 @@
 # uwb_loc C 版 — マイコンで測位する
 
+> **このリポジトリは 2026-08-21 をもって凍結しました。** 成果は
+> [kouhei1970/m5stamp_uwb_localizer](https://github.com/kouhei1970/m5stamp_uwb_localizer)
+> （`components/uwb_loc/` 等）に取り込まれ、以後の開発はそちらで行います。
+> 本ディレクトリは参考・履歴として残します。
+
 > **この文書**: C 版の使い方と移植のしかた。アルゴリズムの中身は
 > [../docs/UWB_ALGORITHMS.md](../docs/UWB_ALGORITHMS.md)、
 > Python 版の使い方は [../docs/TUTORIAL.md](../docs/TUTORIAL.md)。
